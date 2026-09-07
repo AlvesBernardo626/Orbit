@@ -1,0 +1,33 @@
+:root {
+  --background: #0f1115;
+  --surface: #1c1f26;
+  --elevated: #282c34;
+  --border: #3a3f4b;
+  --text: #e0e2e6;
+  --muted: #8b92a5;
+  --accent: #5c6bc0;
+  --accent-hover: #7986cb;
+  --danger: #ef5350;
+  --success: #66bb6a;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--background);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  display: flex;
+  flex: 1;
+  height: 100%;
+}

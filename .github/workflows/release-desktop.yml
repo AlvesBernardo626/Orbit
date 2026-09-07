@@ -29,7 +29,16 @@ jobs:
       - name: Validate the public API before embedding its URL
         run: |
           test -n "$VITE_API_URL" || { echo 'Configure the ORBIT_PRODUCTION_API_URL repository variable.'; exit 1; }
-          curl --fail --silent --show-error --max-time 15 "$VITE_API_URL/health/live" > /dev/null
+          api_ready=false
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error --connect-timeout 10 --max-time 30 "$VITE_API_URL/health/live" > /dev/null; then
+              api_ready=true
+              break
+            fi
+            echo "Waiting for the free Render service to wake up ($attempt/12)"
+            sleep 10
+          done
+          test "$api_ready" = true || { echo 'The public Orbit API did not become ready.'; exit 1; }
       - id: version
         name: Calculate monotonically increasing version
         run: |

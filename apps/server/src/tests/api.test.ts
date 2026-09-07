@@ -41,28 +41,14 @@ describe('infraestrutura de produção', () => {
 
   it('lista e redireciona somente artefatos da release atual', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          tag_name: 'v0.1.7',
-          name: 'Orbit 0.1.7',
-          published_at: '2026-09-07T12:00:00Z',
-          html_url: 'https://github.com/orbit-test/orbit/releases/tag/v0.1.7',
-          assets: [
-            {
-              id: 1,
-              name: 'Orbit-0.1.7-arm64.dmg',
-              size: 123,
-              browser_download_url:
-                'https://github.com/orbit-test/orbit/releases/download/v0.1.7/Orbit-0.1.7-arm64.dmg',
-              url: 'https://api.github.com/repos/orbit-test/orbit/releases/assets/1',
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
+      new Response(null, {
+        status: 302,
+        headers: { Location: 'https://github.com/orbit-test/orbit/releases/tag/v0.1.7' },
+      }),
     );
     const listing = await request(app).get('/downloads').expect(200);
     expect(listing.body.version).toBe('0.1.7');
+    expect(listing.body.publishedAt).toBeNull();
     expect(listing.body.downloads['mac-arm64']).toMatch(/Orbit-0\.1\.7-arm64\.dmg$/);
     await request(app)
       .get('/downloads/Orbit-0.1.7-arm64.dmg')

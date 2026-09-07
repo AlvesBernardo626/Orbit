@@ -74,7 +74,7 @@ O `render.yaml` usa `/health/ready` e o plano gratuito do Render. Nesse plano, o
 
 Para ativar o fluxo, conecte um repositório GitHub ao Render e configure no GitHub a variável de repositório `ORBIT_PRODUCTION_API_URL` com a URL `https://...onrender.com` e o secret `RENDER_DEPLOY_HOOK_URL` copiado das configurações do serviço. Em repositório privado, adicione no Render `GITHUB_RELEASE_TOKEN` com acesso somente de leitura a Contents; em repositório público ele não é necessário. Certificados permanecem opcionais e entram somente pelos secrets documentados em [Desenvolvimento e deploy](docs/DEPLOYMENT.md).
 
-Downloads estáveis ficam disponíveis em `GET /downloads` e nos atalhos `/downloads/latest/mac-arm64`, `/downloads/latest/mac-x64`, `/downloads/latest/mac-universal` e `/downloads/latest/windows`. Nenhum instalador em `dist/` local é publicado automaticamente; a fonte global é sempre a Release criada pelo CI.
+Downloads estáveis ficam disponíveis em `GET /downloads` e nos atalhos `/downloads/latest/mac-arm64`, `/downloads/latest/mac-x64`, `/downloads/latest/mac-universal` e `/downloads/latest/windows`. Em repositórios públicos, esses endpoints usam o redirecionamento estável `releases/latest` do GitHub, sem depender da cota da API pública. Nenhum instalador em `dist/` local é publicado automaticamente; a fonte global é sempre a Release criada pelo CI.
 
 ## Documentação
 

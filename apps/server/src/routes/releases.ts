@@ -15,7 +15,7 @@ type ReleaseAsset = {
 type GithubRelease = {
   tag_name: string;
   name: string | null;
-  published_at: string;
+  published_at: string | null;
   html_url: string;
   assets: ReleaseAsset[];
 };
@@ -34,6 +34,61 @@ async function latestRelease() {
   if (!desktopReleaseRepository)
     throw new AppError(503, 'Repositório de releases do desktop não configurado');
   if (cache && cache.expiresAt > Date.now()) return cache.value;
+
+  if (!env.GITHUB_RELEASE_TOKEN) {
+    const latestUrl = `https://github.com/${desktopReleaseRepository}/releases/latest`;
+    const response = await fetch(latestUrl, {
+      headers: { Accept: 'text/html', 'User-Agent': 'Orbit-Release-Service' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.status === 404) throw new AppError(404, 'Nenhuma versão do Orbit foi publicada');
+    const location = response.headers.get('location');
+    if (![301, 302, 307, 308].includes(response.status) || !location)
+      throw new AppError(502, 'Não foi possível localizar a versão publicada');
+    const releasePage = new URL(location, latestUrl);
+    const tagPrefix = `/${desktopReleaseRepository}/releases/tag/`;
+    if (
+      releasePage.protocol !== 'https:' ||
+      releasePage.hostname !== 'github.com' ||
+      !releasePage.pathname.toLowerCase().startsWith(tagPrefix.toLowerCase())
+    )
+      throw new AppError(502, 'Origem inválida para a versão publicada');
+    const tag = decodeURIComponent(releasePage.pathname.slice(tagPrefix.length));
+    const version = tag.replace(/^v/, '');
+    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
+      throw new AppError(502, 'Versão publicada inválida');
+
+    const names = [
+      'latest.yml',
+      'latest-mac.yml',
+      ...['arm64', 'x64', 'universal'].flatMap((arch) =>
+        ['dmg', 'zip'].flatMap((extension) => [
+          `Orbit-${version}-${arch}.${extension}`,
+          `Orbit-${version}-${arch}.${extension}.blockmap`,
+        ]),
+      ),
+      `Orbit-Setup-${version}-x64.exe`,
+      `Orbit-Setup-${version}-x64.exe.blockmap`,
+      'SHA256SUMS.txt',
+    ];
+    const value: GithubRelease = {
+      tag_name: tag,
+      name: `Orbit ${version}`,
+      published_at: null,
+      html_url: releasePage.toString(),
+      assets: names.map((name, id) => ({
+        id,
+        name,
+        size: 0,
+        browser_download_url: `https://github.com/${desktopReleaseRepository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`,
+        url: '',
+      })),
+    };
+    cache = { expiresAt: Date.now() + env.RELEASE_CACHE_SECONDS * 1000, value };
+    return value;
+  }
+
   const response = await fetch(
     `https://api.github.com/repos/${desktopReleaseRepository}/releases/latest`,
     {

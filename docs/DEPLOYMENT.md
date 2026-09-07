@@ -93,7 +93,7 @@ Configure estes secrets no GitHub quando estiverem disponíveis:
 
 `APPLE_API_KEY_P8` contém o conteúdo da chave; o workflow cria um arquivo temporário no runner e não o adiciona ao repositório. Builds sem secrets são permitidas, mas sistemas operacionais podem exibir alertas e a atualização automática assinada precisa ser homologada antes de distribuição ampla.
 
-A API usa `RENDER_GIT_REPO_SLUG` automaticamente para localizar a Release. `GET /downloads` lista os instaladores atuais e `/downloads/<arquivo>` serve também `latest.yml` e `latest-mac.yml`. Em repositório público, a API redireciona para o GitHub. Em repositório privado, configure no Render `GITHUB_RELEASE_TOKEN` com permissão fina somente `Contents: read`; a API transmite os arquivos e suporta requisições parciais sem revelar o token. `DESKTOP_RELEASE_REPOSITORY=owner/repository` permite sobrescrever o slug quando as releases estiverem em outro repositório.
+A API usa `RENDER_GIT_REPO_SLUG` automaticamente para localizar a Release. `GET /downloads` lista os instaladores atuais e `/downloads/<arquivo>` serve também `latest.yml` e `latest-mac.yml`. Em repositório público, a API usa o redirecionamento estável `releases/latest`, evitando a cota compartilhada da API do GitHub. Em repositório privado, configure no Render `GITHUB_RELEASE_TOKEN` com permissão fina somente `Contents: read`; a API transmite os arquivos e suporta requisições parciais sem revelar o token. `DESKTOP_RELEASE_REPOSITORY=owner/repository` permite sobrescrever o slug quando as releases estiverem em outro repositório.
 
 ## Verificação antes de distribuição
 

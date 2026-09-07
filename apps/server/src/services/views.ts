@@ -7,6 +7,7 @@ type UserRecord = {
   displayName: string;
   avatar?: string | null;
   banner?: string | null;
+  profileColor?: string | null;
   bio?: string | null;
   status?: string | null;
   customStatus?: string | null;
@@ -19,6 +20,7 @@ export function publicUser(user: UserRecord): User {
     displayName: user.displayName,
     avatar: user.avatar ?? '',
     banner: user.banner ?? '',
+    profileColor: user.profileColor ?? '#7c3aed',
     bio: user.bio ?? '',
     customStatus: user.customStatus ?? '',
     status: onlineUsers.has(id) ? ((user.status as Status) ?? 'online') : 'offline',

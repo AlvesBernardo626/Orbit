@@ -27,6 +27,9 @@ export function createApp() {
       allowedHeaders: ['Content-Type', 'Authorization'],
     }),
   );
+  // Imagens de perfil são redimensionadas no cliente e persistidas no MongoDB. Somente esta rota
+  // aceita um corpo maior; autenticação e as demais APIs mantêm o limite reduzido.
+  app.use('/api/me', express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '80kb' }));
   app.get('/health/live', (_req, res) =>
     res.json({ status: 'ok', commit: env.RENDER_GIT_COMMIT ?? 'local' }),

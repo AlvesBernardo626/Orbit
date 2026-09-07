@@ -9,6 +9,7 @@ const userSchema = new Schema(
     passwordHash: { type: String, required: true, select: false },
     avatar: { type: String, default: '' },
     banner: { type: String, default: '' },
+    profileColor: { type: String, default: '#7c3aed' },
     bio: { type: String, default: '' },
     status: { type: String, enum: ['online', 'away', 'busy', 'offline'], default: 'online' },
     customStatus: { type: String, default: '' },

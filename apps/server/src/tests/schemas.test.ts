@@ -31,6 +31,17 @@ describe('contratos e permissões', () => {
   it('rejeita privilégios e URLs executáveis no perfil', () => {
     expect(profileSchema.safeParse({ role: 'admin' }).success).toBe(false);
     expect(profileSchema.safeParse({ avatar: 'javascript:alert(1)' }).success).toBe(false);
+    expect(profileSchema.safeParse({ avatar: 'data:image/svg+xml;base64,PHN2Zz4=' }).success).toBe(
+      false,
+    );
+    expect(
+      profileSchema.safeParse({
+        avatar: 'data:image/webp;base64,UklGRg==',
+        profileColor: '#7C3AED',
+      }).success,
+    ).toBe(true);
+    expect(profileSchema.parse({ profileColor: '#7C3AED' }).profileColor).toBe('#7c3aed');
+    expect(profileSchema.safeParse({ profileColor: 'purple' }).success).toBe(false);
   });
   it('limita mensagens e envelopes de signaling', () => {
     expect(

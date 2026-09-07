@@ -27,6 +27,19 @@ export const imageSchema = z.union([
     .max(2048)
     .refine((v) => new URL(v).protocol === 'https:', 'Use uma URL HTTPS'),
 ]);
+const localProfileImageSchema = z
+  .string()
+  .max(1_700_000, 'Imagem processada muito grande')
+  .regex(
+    /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
+    'Formato de imagem inválido',
+  );
+export const profileImageSchema = z.union([imageSchema, localProfileImageSchema]);
+export const profileColorSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^#[0-9a-f]{6}$/, 'Use uma cor hexadecimal como #7c3aed');
 export const registerSchema = z
   .object({ username: usernameSchema, displayName: text(48).min(1), password: passwordSchema })
   .strict();
@@ -38,8 +51,9 @@ export const profileSchema = z
   .object({
     username: usernameSchema,
     displayName: text(48).min(1),
-    avatar: imageSchema,
-    banner: imageSchema,
+    avatar: profileImageSchema,
+    banner: profileImageSchema,
+    profileColor: profileColorSchema,
     bio: text(300),
     status: statusSchema,
     customStatus: text(80),
@@ -81,6 +95,7 @@ export interface User {
   displayName: string;
   avatar: string;
   banner: string;
+  profileColor: string;
   bio: string;
   status: Status;
   customStatus: string;

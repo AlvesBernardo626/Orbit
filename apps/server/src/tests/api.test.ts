@@ -147,12 +147,18 @@ describe('perfis, amizade e bloqueio', () => {
         .send({ username: 'bob', displayName: 'Bob', password: 'b-strong-password!' })
     ).body;
   });
-  it('edita somente o próprio perfil e valida URLs', async () => {
-    await request(app)
+  it('edita somente o próprio perfil e valida imagens locais', async () => {
+    const profile = await request(app)
       .patch('/api/me')
       .set('Authorization', `Bearer ${alice.accessToken}`)
-      .send({ bio: 'Olá!', avatar: 'https://example.com/avatar.png' })
+      .send({
+        bio: 'Olá!',
+        avatar: 'data:image/webp;base64,UklGRg==',
+        profileColor: '#7c3aed',
+      })
       .expect(200);
+    expect(profile.body.avatar).toBe('data:image/webp;base64,UklGRg==');
+    expect(profile.body.profileColor).toBe('#7c3aed');
     await request(app)
       .patch('/api/me')
       .set('Authorization', `Bearer ${alice.accessToken}`)

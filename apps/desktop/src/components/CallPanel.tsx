@@ -1,11 +1,12 @@
 import { Media, Participant, Screen } from './CallMedia';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Mic, MicOff, Monitor, PhoneOff, Settings, Volume2 } from 'lucide-react';
 import type { CallPeer, Conversation, User } from '@orbit/shared';
 import type { MediaTransport, RemoteMedia } from '../media/types';
 import { qualities } from '../media/types';
 import { captureScreen } from '../media/capture';
 import { Field, Modal } from './ui';
+import callRingtone from '../assets/call-ringtone.mp3';
 export function CallPanel({
   transport,
   conversation,
@@ -30,6 +31,37 @@ export function CallPanel({
     ReturnType<NonNullable<typeof window.orbit>['capabilities']>
   > | null>(null);
   const [screenPermissionMissing, setScreenPermissionMissing] = useState(false);
+  const ringtone = useRef<HTMLAudioElement | null>(null);
+  const ringtoneStartedAt = useRef(0);
+  useEffect(() => {
+    if (state.phase === 'joining' && !ringtone.current) {
+      const player = new Audio(callRingtone);
+      ringtone.current = player;
+      ringtoneStartedAt.current = performance.now();
+      player.loop = true;
+      player.volume = 0.38;
+      void player.play().catch(() => undefined);
+      return;
+    }
+    if (state.phase === 'joining' || !ringtone.current) return;
+    const player = ringtone.current;
+    const delay =
+      state.phase === 'connected'
+        ? Math.max(0, 1800 - (performance.now() - ringtoneStartedAt.current))
+        : 0;
+    const timer = window.setTimeout(() => {
+      player.pause();
+      player.currentTime = 0;
+      if (ringtone.current === player) ringtone.current = null;
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [state.phase]);
+  useEffect(() => {
+    return () => {
+      ringtone.current?.pause();
+      ringtone.current = null;
+    };
+  }, []);
   useEffect(() => {
     if (window.orbit)
       void window.orbit
@@ -122,7 +154,9 @@ export function CallPanel({
               ? 'Vocês estão conectados'
               : state.phase === 'reconnecting'
                 ? 'Reconectando…'
-                : 'Conectando áudio…'}
+                : state.phase === 'joining'
+                  ? 'Chamando…'
+                  : 'Conectando áudio…'}
           </strong>
           <span className="muted">{conversation?.name || 'Chamada de voz'}</span>
         </div>

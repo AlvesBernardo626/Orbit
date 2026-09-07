@@ -14,9 +14,16 @@ try {
   const app = createApp();
   app.use(errorHandler);
   const server = createServer(app);
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+  server.requestTimeout = 30000;
   const io = attachSockets(server);
   server.listen(env.PORT, '0.0.0.0', () => logger.info({ port: env.PORT }, 'Orbit API pronta'));
+  let shuttingDown = false;
   const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.close();
     io.close(() => {
       void mongoose.disconnect().then(() => process.exit(0));
     });

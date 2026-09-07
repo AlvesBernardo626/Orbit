@@ -9,6 +9,7 @@ import pino from 'pino';
 import { env, origins, logConfig } from './config/env.js';
 import { authRoutes } from './controllers/auth.js';
 import { AppError } from './services/errors.js';
+import { releaseRoutes } from './routes/releases.js';
 export const logger = pino(logConfig);
 export function createApp() {
   const app = express();
@@ -27,7 +28,9 @@ export function createApp() {
     }),
   );
   app.use(express.json({ limit: '80kb' }));
-  app.get('/health/live', (_req, res) => res.json({ status: 'ok' }));
+  app.get('/health/live', (_req, res) =>
+    res.json({ status: 'ok', commit: env.RENDER_GIT_COMMIT ?? 'local' }),
+  );
   app.get('/health/ready', (_req, res) =>
     res
       .status(mongoose.connection.readyState === 1 ? 200 : 503)
@@ -49,6 +52,7 @@ export function createApp() {
   );
   app.use('/api/auth', authRoutes);
   app.use('/api', apiRoutes);
+  app.use('/downloads', releaseRoutes);
   return app;
 }
 export const errorHandler: express.ErrorRequestHandler = (error, _req, res, _next) => {

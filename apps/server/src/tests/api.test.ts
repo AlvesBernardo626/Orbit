@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, it, expect } from 'vitest';
+import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import request from 'supertest';
@@ -16,6 +16,8 @@ beforeAll(async () => {
     MONGODB_URI: repl.getUri(),
     JWT_SECRET: 'a'.repeat(64),
     CORS_ORIGINS: 'orbit://app',
+    DESKTOP_RELEASE_REPOSITORY: 'orbit-test/orbit',
+    RENDER_GIT_COMMIT: 'test-commit',
   });
   await mongoose.connect(repl.getUri());
   const { createApp, errorHandler } = await import('../app.js');
@@ -28,6 +30,52 @@ afterAll(async () => {
   await mongoose.disconnect();
   await repl?.stop();
 });
+
+describe('infraestrutura de produção', () => {
+  it('expõe o commit implantado no health check', async () => {
+    expect((await request(app).get('/health/live').expect(200)).body).toEqual({
+      status: 'ok',
+      commit: 'test-commit',
+    });
+  });
+
+  it('lista e redireciona somente artefatos da release atual', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          tag_name: 'v0.1.7',
+          name: 'Orbit 0.1.7',
+          published_at: '2026-09-07T12:00:00Z',
+          html_url: 'https://github.com/orbit-test/orbit/releases/tag/v0.1.7',
+          assets: [
+            {
+              id: 1,
+              name: 'Orbit-0.1.7-arm64.dmg',
+              size: 123,
+              browser_download_url:
+                'https://github.com/orbit-test/orbit/releases/download/v0.1.7/Orbit-0.1.7-arm64.dmg',
+              url: 'https://api.github.com/repos/orbit-test/orbit/releases/assets/1',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const listing = await request(app).get('/downloads').expect(200);
+    expect(listing.body.version).toBe('0.1.7');
+    expect(listing.body.downloads['mac-arm64']).toMatch(/Orbit-0\.1\.7-arm64\.dmg$/);
+    await request(app)
+      .get('/downloads/Orbit-0.1.7-arm64.dmg')
+      .expect(307)
+      .expect(
+        'Location',
+        'https://github.com/orbit-test/orbit/releases/download/v0.1.7/Orbit-0.1.7-arm64.dmg',
+      );
+    await request(app).get('/downloads/not-in-the-release.exe').expect(404);
+    fetch.mockRestore();
+  });
+});
+
 describe('autenticação real com MongoDB', () => {
   it('cria usuário sem expor hash e rejeita duplicatas', async () => {
     const r = await request(app)

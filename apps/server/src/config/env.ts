@@ -12,6 +12,14 @@ const schema = z.object({
   TURN_SECRET: z.string().default(''),
   ICE_RELAY_ONLY: z.enum(['true', 'false']).default('false'),
   REGISTRATION_ENABLED: z.enum(['true', 'false']).default('true'),
+  DESKTOP_RELEASE_REPOSITORY: z
+    .string()
+    .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)
+    .optional(),
+  GITHUB_RELEASE_TOKEN: z.string().optional(),
+  RELEASE_CACHE_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  RENDER_GIT_REPO_SLUG: z.string().optional(),
+  RENDER_GIT_COMMIT: z.string().optional(),
 });
 export const env = schema.parse(process.env);
 if (env.JWT_SECRET.startsWith('replace-'))
@@ -28,7 +36,16 @@ if (
 if (env.TURN_URLS && env.TURN_SECRET.length < 32)
   throw new Error('TURN_SECRET deve ter pelo menos 32 caracteres');
 if (env.ICE_RELAY_ONLY === 'true' && !env.TURN_URLS) throw new Error('Relay requer TURN');
+export const desktopReleaseRepository =
+  env.DESKTOP_RELEASE_REPOSITORY ?? env.RENDER_GIT_REPO_SLUG ?? '';
 export const logConfig = {
   level: env.NODE_ENV === 'test' ? 'silent' : 'info',
-  redact: ['password', 'token', 'refreshToken', 'accessToken', 'req.headers.authorization'],
+  redact: [
+    'password',
+    'token',
+    'refreshToken',
+    'accessToken',
+    'GITHUB_RELEASE_TOKEN',
+    'req.headers.authorization',
+  ],
 };

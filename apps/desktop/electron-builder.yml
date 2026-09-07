@@ -1,0 +1,66 @@
+appId: app.orbit.desktop
+productName: Orbit
+copyright: Copyright © 2026 Orbit
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+directories:
+  output: ../../dist
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+asar: true
+
+publish:
+  provider: generic
+  url: ${env.ORBIT_UPDATE_URL}
+
+mac:
+  target:
+    - dmg
+    - zip
+  icon: icon.png
+  category: public.app-category.social-networking
+  minimumSystemVersion: '11.0'
+  darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  notarize: true
+  extendInfo:
+    CFBundleName: Orbit
+    CFBundleDisplayName: Orbit
+    NSHighResolutionCapable: true
+    NSMicrophoneUsageDescription: O Orbit usa o microfone somente durante as chamadas iniciadas por você.
+    NSScreenCaptureUsageDescription: O Orbit captura somente a tela ou janela que você escolher para transmitir.
+    NSAudioCaptureUsageDescription: O Orbit captura o áudio do sistema somente quando você ativar essa opção ao compartilhar a tela.
+    NSUserNotificationAlertStyle: alert
+
+dmg:
+  title: ${productName} ${version} (${arch})
+  format: ULFO
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+win:
+  target: nsis
+  icon: icon.png
+
+nsis:
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Orbit

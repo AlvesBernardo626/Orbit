@@ -26,11 +26,18 @@ export function CallPanel({
   const [quality, setQuality] = useState('balanced');
   const [audio, setAudio] = useState(false);
   const [systemAudio, setSystemAudio] = useState(!window.orbit);
+  const [runtime, setRuntime] = useState<Awaited<
+    ReturnType<NonNullable<typeof window.orbit>['capabilities']>
+  > | null>(null);
+  const [screenPermissionMissing, setScreenPermissionMissing] = useState(false);
   useEffect(() => {
     if (window.orbit)
       void window.orbit
         .capabilities()
-        .then((c) => setSystemAudio(c.systemAudio))
+        .then((c) => {
+          setRuntime(c);
+          setSystemAudio(c.systemAudio);
+        })
         .catch(() => setSystemAudio(false));
   }, []);
   const [sources, setSources] = useState<{ id: string; name: string; thumbnail: string }[]>([]);
@@ -53,11 +60,27 @@ export function CallPanel({
     setBusy(true);
     try {
       if (window.orbit) {
+        const info = await window.orbit.capabilities();
+        setRuntime(info);
+        if (
+          info.platform === 'darwin' &&
+          ['denied', 'restricted'].includes(info.permissions.screen)
+        ) {
+          setScreenPermissionMissing(true);
+          setSelecting(true);
+          return;
+        }
         setSources(await window.orbit.sources());
+        setScreenPermissionMissing(false);
         setSelecting(true);
       } else setSelecting(true);
     } catch (e) {
-      onError((e as Error).message);
+      const info = await window.orbit?.capabilities().catch(() => null);
+      if (info?.platform === 'darwin' && info.permissions.screen !== 'granted') {
+        setRuntime(info);
+        setScreenPermissionMissing(true);
+        setSelecting(true);
+      } else onError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -77,7 +100,14 @@ export function CallPanel({
   if (state.phase === 'idle')
     return state.error ? (
       <div className="call-error" role="alert">
-        {state.error}
+        <span>{state.error}</span>
+        {window.orbit && state.error.includes('não tem acesso ao microfone') && (
+          <button
+            onClick={() => void window.orbit?.openSystemSettings('microphone').catch(onError)}
+          >
+            Abrir configurações do microfone
+          </button>
+        )}
       </div>
     ) : null;
   const remoteFor = (p: CallPeer): RemoteMedia | undefined =>
@@ -234,7 +264,21 @@ export function CallPanel({
             do macOS 14.2 ou mais recente com a permissão de captura de áudio. Seu microfone
             continua independente do áudio da transmissão.
           </p>
-          {window.orbit ? (
+          {screenPermissionMissing ? (
+            <div className="permission-help" role="alert">
+              <strong>Permissão de gravação de tela necessária</strong>
+              <p>
+                Abra Ajustes do Sistema &gt; Privacidade e Segurança &gt; Gravação de Tela, habilite
+                o Orbit e reinicie o aplicativo para a alteração entrar em vigor.
+              </p>
+              <button
+                className="primary"
+                onClick={() => void window.orbit?.openSystemSettings('screen').catch(onError)}
+              >
+                Abrir Ajustes do Sistema
+              </button>
+            </div>
+          ) : window.orbit ? (
             <div className="sources">
               {sources.map((source) => (
                 <button disabled={busy} key={source.id} onClick={() => void share(source.id)}>
@@ -253,6 +297,15 @@ export function CallPanel({
             <button className="primary" disabled={busy} onClick={() => void share()}>
               Escolher tela ou janela
             </button>
+          )}
+          {runtime && (
+            <p className="muted small">
+              {runtime.platform === 'darwin'
+                ? `macOS ${runtime.osVersion} · ${runtime.arch}`
+                : runtime.platform === 'win32'
+                  ? `Windows ${runtime.osVersion} · ${runtime.arch}`
+                  : `${runtime.platform} ${runtime.osVersion} · ${runtime.arch}`}
+            </p>
           )}
         </Modal>
       )}

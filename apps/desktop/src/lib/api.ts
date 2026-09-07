@@ -1,9 +1,17 @@
 import type { AuthResult, Session } from '@orbit/shared';
+import { friendlyNetworkError } from './networkErrors';
 export const API = import.meta.env.VITE_API_URL as string;
 let session: Session | null = null;
 let browserRefresh: string | null = null;
 let refreshPromise: Promise<Session | null> | null = null;
 const listeners = new Set<() => void>();
+async function fetchApi(path: string, init: RequestInit) {
+  try {
+    return await fetch(`${API}${path}`, init);
+  } catch (error) {
+    throw friendlyNetworkError(error, API);
+  }
+}
 export const authStore = {
   subscribe(fn: () => void) {
     listeners.add(fn);
@@ -26,7 +34,7 @@ async function action(
   if (import.meta.env.PROD) throw new Error('Abra o Orbit pelo aplicativo desktop');
   if (action === 'logout') {
     if (session)
-      await fetch(`${API}/api/auth/logout`, {
+      await fetchApi('/api/auth/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.accessToken}` },
       }).catch(() => undefined);
@@ -34,7 +42,7 @@ async function action(
     return null;
   }
   if (action === 'refresh' && !browserRefresh) return null;
-  const response = await fetch(`${API}/api/auth/${action}`, {
+  const response = await fetchApi(`/api/auth/${action}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(action === 'refresh' ? { refreshToken: browserRefresh } : data),
@@ -90,7 +98,7 @@ export async function api<T>(
   options: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<T> {
   const request = async () =>
-    fetch(`${API}/api${path}`, {
+    fetchApi(`/api${path}`, {
       method: options.method ?? 'GET',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await token()}` },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),

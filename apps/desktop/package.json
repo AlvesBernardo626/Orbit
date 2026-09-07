@@ -1,6 +1,9 @@
 {
   "name": "@orbit/desktop",
   "version": "0.1.0",
+  "description": "Orbit — comunicação privada para grupos pequenos",
+  "author": "Orbit",
+  "license": "UNLICENSED",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
@@ -8,56 +11,34 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win"
-  },
-  "dependencies": {
-    "@orbit/shared": "*",
-    "lucide-react": "^1.41.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "socket.io-client": "^4.8.3"
-  },
-  "build": {
-    "appId": "app.orbit.desktop",
-    "productName": "Orbit",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "dist-electron/**/*",
-      "package.json"
-    ],
-    "asar": true,
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "category": "public.app-category.social-networking",
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "O Orbit usa o microfone nas chamadas que voc\u00ea inicia.",
-        "NSScreenCaptureUsageDescription": "O Orbit compartilha a tela ou janela que voc\u00ea escolher.",
-        "NSAudioCaptureUsageDescription": "O Orbit captura o \u00e1udio do sistema somente quando voc\u00ea ativa essa op\u00e7\u00e3o ao compartilhar a tela."
-      }
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+    "validate:release": "node scripts/validate-release.mjs",
+    "build:mac": "npm run validate:release && npm run package:mac",
+    "build:mac:arm64": "npm run validate:release && npm run package:mac:arm64",
+    "build:mac:x64": "npm run validate:release && npm run package:mac:x64",
+    "build:mac:universal": "npm run validate:release && npm run package:mac:universal",
+    "build:win": "npm run validate:release && npm run package:win",
+    "package:mac": "electron-builder --mac dmg zip --x64 --arm64",
+    "package:mac:arm64": "electron-builder --mac dmg zip --arm64",
+    "package:mac:x64": "electron-builder --mac dmg zip --x64",
+    "package:mac:universal": "electron-builder --mac dmg zip --universal",
+    "package:mac:release": "npm run package:mac && npm run package:mac:universal",
+    "package:win": "electron-builder --win nsis --x64"
   },
   "devDependencies": {
+    "@orbit/shared": "*",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
-    "electron": "^44.2.0",
+    "electron": "44.2.0",
     "electron-builder": "^26.15.3",
+    "lucide-react": "^1.41.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "socket.io-client": "^4.8.3",
     "vite": "^8.2.2",
     "vite-plugin-electron": "^1.1.2"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

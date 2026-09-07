@@ -1370,6 +1370,24 @@ legend {
   color: #efb49e;
   padding: 15px;
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.call-error button {
+  flex: 0 0 auto;
+}
+.permission-help {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #735448;
+  border-radius: 10px;
+  background: #2c211d;
+  color: #f1c7b8;
+}
+.permission-help p {
+  margin: 8px 0 14px;
 }
 .sources {
   display: grid;

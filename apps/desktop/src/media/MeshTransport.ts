@@ -1,6 +1,7 @@
 import type { Socket } from 'socket.io-client';
 import type { CallPeer, IceConfig, Signal } from '@orbit/shared';
 import { api } from '../lib/api';
+import { ensureMicrophoneAccess } from './permissions';
 import {
   qualities,
   type CallSnapshot,
@@ -79,6 +80,7 @@ export class MeshTransport implements MediaTransport {
     this.update({ conversationId, phase: 'joining', error: '' });
     let mic: MediaStream | undefined;
     try {
+      await ensureMicrophoneAccess();
       mic = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: deviceId ? { exact: deviceId } : undefined,
@@ -308,6 +310,7 @@ export class MeshTransport implements MediaTransport {
   }
   async setMicrophone(deviceId: string) {
     if (!this.state.conversationId) return;
+    await ensureMicrophoneAccess();
     const generation = this.generation;
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {

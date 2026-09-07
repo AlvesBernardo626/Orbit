@@ -26,11 +26,20 @@ Se Documents estiver sincronizado pelo iCloud/OneDrive, mantenha o checkout fora
 
 ## Render
 
-Importe o repositório e o Blueprint `render.yaml`. Ele configura um serviço Docker, uma instância, porta fornecida pelo ambiente e health check `/health/ready`. `/health/live` verifica o processo; readiness verifica a conexão MongoDB. Configure JWT_SECRET com pelo menos 48 caracteres aleatórios; se o gerador Render fornecer menos, substitua por um segredo gerado localmente. A aplicação recusa a chave de exemplo.
+Publique este checkout em um repositório GitHub e importe o Blueprint `render.yaml`. O checkout ainda não possui `remote`; associe o repositório correto sem sobrescrever um remote existente:
+
+```sh
+git remote add origin https://github.com/SEU-USUARIO/SEU-REPOSITORIO.git
+git push -u origin main
+```
+
+O Blueprint configura serviço Docker, instância paga, deploy automático desligado, health check `/health/ready` e até 30 segundos para encerramento gracioso. `/health/live` verifica o processo e informa o commit; readiness exige a conexão MongoDB. O deploy é acionado pelo CI somente depois dos testes e builds passarem, sempre com o SHA exato. Durante a implantação, o Render só troca o tráfego depois que a nova instância estiver pronta. Configure `JWT_SECRET` com pelo menos 48 caracteres aleatórios e `MONGODB_URI` no painel; a aplicação recusa a chave de exemplo.
 
 Use plano sempre ativo para evitar cold starts e interrupções de chamadas. A mídia P2P não passa pelo Render; a API hospeda apenas REST/Socket.IO. Não é necessário nem adequado tentar rodar coturn UDP dentro deste serviço web.
 
-Cadastros estão fechados no Blueprint. Abra `REGISTRATION_ENABLED=true` para criar as contas do grupo inicial, depois feche novamente. Configure `TRUST_PROXY_HOPS` conforme a cadeia real de proxies; não use `true` irrestrito. Configure somente origens exatas em `CORS_ORIGINS`.
+Cadastros ficam abertos no Blueprint (`REGISTRATION_ENABLED=true`) para corrigir o fluxo inicial de criação de conta. Depois de criar as contas necessárias, você pode trocar a variável para `false` no painel. Configure `TRUST_PROXY_HOPS` conforme a cadeia real de proxies; não use `true` irrestrito. Configure somente origens exatas em `CORS_ORIGINS`.
+
+Todo serviço web recebe uma URL HTTPS `onrender.com`. Copie essa origem e crie no repositório GitHub a variável Actions `ORBIT_PRODUCTION_API_URL`, sem `/api` ou barra final. Nas configurações do serviço Render, copie o Deploy Hook e grave-o no GitHub como secret `RENDER_DEPLOY_HOOK_URL`. O hook é secreto e nunca deve entrar no código. Se a primeira execução de `Publish desktop` ocorrer antes dessas configurações, defina ambas e reexecute o workflow que falhou.
 
 ## STUN / TURN
 
@@ -40,18 +49,51 @@ As credenciais são renovadas na entrada/reentrada. Chamadas já estabelecidas u
 
 ## Desktop de produção
 
-Defina no ambiente do build:
+Defina no ambiente do build uma API pública HTTPS e sua rota de atualização. Os artefatos são gravados em `dist/` na raiz:
 
 ```sh
-VITE_API_URL=https://SEU-SERVICO.onrender.com npm run build
-npm run dist:mac
-# Em Windows, configure VITE_API_URL via PowerShell e execute:
-npm run dist:win
+export VITE_API_URL=https://SEU-SERVICO.onrender.com
+export ORBIT_UPDATE_URL=https://SEU-SERVICO.onrender.com/downloads
+npm run build:mac
+# Também disponíveis: build:mac:arm64, build:mac:x64 e build:mac:universal.
+# Em Windows, configure VITE_API_URL no PowerShell e execute:
+npm run build:win
 ```
 
 Nunca use `VITE_` para MongoDB, JWT, senha ou TURN_SECRET. O endereço da API é configuração pública compilada no main e renderer. Builds de produção recusam API sem HTTPS e carregam a UI via protocolo seguro `orbit://app`.
 
-Os scripts geram instaladores DMG e NSIS. Assinatura, notarização Apple e certificados Windows dependem de contas/certificados do proprietário. Configure as variáveis oficiais do electron-builder (`CSC_LINK`, `CSC_KEY_PASSWORD`, credenciais Apple em CI). Esta entrega não publica, assina ou envia instaladores a lojas, e não configura atualização automática.
+O validador interrompe o empacotamento quando `VITE_API_URL` contém localhost, domínios `example`, placeholders, caminhos ou uma origem sem HTTPS. `ORBIT_UPDATE_URL` deve usar a mesma origem e terminar em `/downloads`. O exemplo é apenas de formato: confirme no painel Render a URL atribuída ao serviço.
+
+`build:mac` gera DMGs separados e ZIPs de atualização para Intel e Apple Silicon; `build:mac:universal` combina as duas arquiteturas quando não há módulos nativos incompatíveis. `build:win` gera um instalador NSIS x64 e metadados de atualização. O arquivo `apps/desktop/electron-builder.yml` define nome, identificador, ícone, Hardened Runtime, entitlements, metadados do `Info.plist`, nomes dos artefatos e feed genérico HTTPS.
+
+Assinatura e notarização dependem das contas do proprietário. O `electron-builder` assina quando recebe `CSC_LINK` e `CSC_KEY_PASSWORD`, e notariza automaticamente quando também recebe um conjunto completo de credenciais:
+
+```sh
+# Recomendado: chave da App Store Connect
+export CSC_LINK=/caminho/DeveloperIDApplication.p12
+export CSC_KEY_PASSWORD='fornecida-pelo-secret-manager'
+export APPLE_API_KEY=/caminho/AuthKey_XXXXXXXXXX.p8
+export APPLE_API_KEY_ID=XXXXXXXXXX
+export APPLE_API_ISSUER=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+npm run build:mac:arm64
+```
+
+Também é suportado o conjunto `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` e `APPLE_TEAM_ID`. Use secrets do CI ou variáveis do shell; não salve os valores no repositório, em `.env.example` ou sob o prefixo `VITE_`. Sem certificado, o build local continua possível e gera um DMG não assinado apenas para testes internos.
+
+Para assinar o instalador Windows, forneça `WIN_CSC_LINK` e `WIN_CSC_KEY_PASSWORD` como secrets no ambiente do build Windows. A ausência dessas variáveis mantém o fluxo local não assinado.
+
+## Releases globais e atualização automática
+
+Após cada `push` em `main`, `Quality` executa tipos, lint, testes e build. Se ele passar, `Publish desktop` usa runners nativos de macOS e Windows, calcula uma versão `major.minor.numero-do-workflow`, cria DMG/ZIP para x64, arm64 e universal e cria EXE NSIS x64. Com os instaladores prontos, o workflow aciona o Deploy Hook com o SHA testado. O Render conserva a versão anterior se o build ou readiness falhar; a Release só é marcada como latest depois que `/health/live` confirmar o mesmo SHA.
+
+Configure estes secrets no GitHub quando estiverem disponíveis:
+
+- macOS: `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`;
+- Windows: `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`.
+
+`APPLE_API_KEY_P8` contém o conteúdo da chave; o workflow cria um arquivo temporário no runner e não o adiciona ao repositório. Builds sem secrets são permitidas, mas sistemas operacionais podem exibir alertas e a atualização automática assinada precisa ser homologada antes de distribuição ampla.
+
+A API usa `RENDER_GIT_REPO_SLUG` automaticamente para localizar a Release. `GET /downloads` lista os instaladores atuais e `/downloads/<arquivo>` serve também `latest.yml` e `latest-mac.yml`. Em repositório público, a API redireciona para o GitHub. Em repositório privado, configure no Render `GITHUB_RELEASE_TOKEN` com permissão fina somente `Contents: read`; a API transmite os arquivos e suporta requisições parciais sem revelar o token. `DESKTOP_RELEASE_REPOSITORY=owner/repository` permite sobrescrever o slug quando as releases estiverem em outro repositório.
 
 ## Verificação antes de distribuição
 
@@ -62,3 +104,5 @@ Referências: [WebSockets no Render](https://render.com/docs/websocket), [health
 ## Áudio de sistema no macOS
 
 O pacote inclui `NSAudioCaptureUsageDescription`. Em macOS 14.2+ o runtime habilita loopback em builds empacotados; o usuário ainda deve conceder a permissão solicitada pelo SO. No desenvolvimento não empacotado, a opção fica desabilitada porque o aplicativo Electron hospedeiro pode não possuir a chave necessária. A API de captura/versão Chromium e as permissões reais precisam ser homologadas no pacote assinado; o teste sintético não comprova captura nativa. Veja [limitações de desktopCapturer](https://www.electronjs.org/docs/latest/api/desktop-capturer#macos-versions-142-or-higher).
+
+O pacote também declara `NSMicrophoneUsageDescription` e `NSScreenCaptureUsageDescription`. Antes de abrir fontes de tela, o processo principal consulta o TCC; em caso de negação, o renderer orienta **Ajustes do Sistema > Privacidade e Segurança > Gravação de Tela** e oferece um atalho limitado a essa tela. O microfone usa `askForMediaAccess` somente após ação do usuário. Permissões alteradas no painel podem exigir reinicialização do Orbit. Notificações web, se habilitadas pela aplicação, passam pela whitelist de origem do `session`; o Orbit atualmente não dispara notificações nativas.

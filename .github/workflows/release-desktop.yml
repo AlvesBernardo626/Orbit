@@ -1,0 +1,167 @@
+name: Publish desktop
+
+on:
+  workflow_run:
+    workflows: [Quality]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orbit-production-release
+  cancel-in-progress: false
+
+env:
+  VITE_API_URL: ${{ vars.ORBIT_PRODUCTION_API_URL }}
+  ORBIT_UPDATE_URL: ${{ vars.ORBIT_PRODUCTION_API_URL }}/downloads
+
+jobs:
+  prepare:
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Validate the public API before embedding its URL
+        run: |
+          test -n "$VITE_API_URL" || { echo 'Configure the ORBIT_PRODUCTION_API_URL repository variable.'; exit 1; }
+          curl --fail --silent --show-error --max-time 15 "$VITE_API_URL/health/live" > /dev/null
+      - id: version
+        name: Calculate monotonically increasing version
+        run: |
+          base_version=$(node --print "require('./apps/desktop/package.json').version")
+          echo "value=${base_version%.*}.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+
+  mac:
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    needs: prepare
+    runs-on: macos-14
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Set release version
+        run: npm version "$RELEASE_VERSION" --workspace @orbit/desktop --no-git-tag-version --ignore-scripts
+      - name: Validate public endpoints and compile
+        run: npm run validate:release -w @orbit/desktop && npm run build
+      - name: Prepare optional Apple notarization key
+        if: env.APPLE_API_KEY_P8 != ''
+        run: |
+          key_path="$RUNNER_TEMP/orbit-notary-key.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+      - name: Build macOS installers and update packages
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: npm run package:mac:release -w @orbit/desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac-${{ env.RELEASE_VERSION }}
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/*.zip
+            dist/*.zip.blockmap
+            dist/latest-mac.yml
+
+  windows:
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    needs: prepare
+    runs-on: windows-latest
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Set release version
+        run: npm version "$env:RELEASE_VERSION" --workspace @orbit/desktop --no-git-tag-version --ignore-scripts
+      - name: Validate public endpoints and compile
+        run: npm run validate:release -w @orbit/desktop; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm run build
+      - name: Build Windows installer and update package
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: npm run package:win -w @orbit/desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-${{ env.RELEASE_VERSION }}
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+
+  publish:
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    needs: [prepare, mac, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*-${{ env.RELEASE_VERSION }}
+          path: release-assets
+          merge-multiple: true
+      - name: Deploy and wait for the matching Render commit
+        env:
+          EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          ORBIT_API_URL: ${{ vars.ORBIT_PRODUCTION_API_URL }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$ORBIT_API_URL" || { echo 'Configure the ORBIT_PRODUCTION_API_URL repository variable.'; exit 1; }
+          test -n "$RENDER_DEPLOY_HOOK_URL" || { echo 'Configure the RENDER_DEPLOY_HOOK_URL repository secret.'; exit 1; }
+          case "$RENDER_DEPLOY_HOOK_URL" in
+            *\?*) separator='&' ;;
+            *) separator='?' ;;
+          esac
+          curl --fail --silent --show-error --request POST "${RENDER_DEPLOY_HOOK_URL}${separator}ref=${EXPECTED_COMMIT}" > /dev/null
+          for attempt in $(seq 1 60); do
+            deployed_commit=$(curl --fail --silent --show-error "$ORBIT_API_URL/health/live" | jq --raw-output '.commit // empty' || true)
+            if [ "$deployed_commit" = "$EXPECTED_COMMIT" ]; then
+              echo "Render is serving commit $EXPECTED_COMMIT"
+              exit 0
+            fi
+            echo "Waiting for Render deployment ($attempt/60)"
+            sleep 10
+          done
+          echo 'Render did not publish the expected commit within 10 minutes.'
+          exit 1
+      - name: Publish immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          gh release create "v$RELEASE_VERSION" ./* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_COMMIT" \
+            --title "Orbit $RELEASE_VERSION" \
+            --notes "Build automático do commit $TARGET_COMMIT. A API correspondente já passou pelo health check de produção no Render." \
+            --latest

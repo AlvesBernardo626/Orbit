@@ -20,7 +20,7 @@ Se Documents estiver sincronizado pelo iCloud/OneDrive, mantenha o checkout fora
 
 1. Crie um cluster MongoDB 8 com replica set, usuário dedicado à base Orbit e acesso mínimo à base (`readWrite`; criação de índices requer as permissões correspondentes).
 2. Libere apenas IPs de saída do serviço Render e o IP de desenvolvimento. Evite liberar a internet inteira.
-3. Coloque a URI `mongodb+srv://.../orbit?...` exclusivamente em `MONGODB_URI` no painel Render. Use TLS e senha aleatória.
+3. Coloque a URI `mongodb+srv://.../orbit?...` exclusivamente em `MONGODB_URI` no painel Render. Use TLS e senha aleatória. O `JWT_SECRET` é gerado automaticamente pelo Render e nunca é armazenado no repositório.
 4. Os índices são criados na inicialização sem `syncIndexes` destrutivo. Também há `npm run db:indexes -w @orbit/server` local. Não apagar/recriar índices automaticamente em produção.
 5. Habilite backups e monitore armazenamento/conexões conforme o plano. Mensagens não possuem TTL destrutivo.
 
@@ -33,7 +33,7 @@ git remote add origin https://github.com/SEU-USUARIO/SEU-REPOSITORIO.git
 git push -u origin main
 ```
 
-O Blueprint configura serviço Docker, instância paga, deploy automático desligado, health check `/health/ready` e até 30 segundos para encerramento gracioso. `/health/live` verifica o processo e informa o commit; readiness exige a conexão MongoDB. O deploy é acionado pelo CI somente depois dos testes e builds passarem, sempre com o SHA exato. Durante a implantação, o Render só troca o tráfego depois que a nova instância estiver pronta. Configure `JWT_SECRET` com pelo menos 48 caracteres aleatórios e `MONGODB_URI` no painel; a aplicação recusa a chave de exemplo.
+O Blueprint configura serviço Docker, instância paga, deploy automático desligado, health check `/health/ready` e até 30 segundos para encerramento gracioso. `/health/live` verifica o processo e informa o commit; readiness exige a conexão MongoDB. O deploy é acionado pelo CI somente depois dos testes e builds passarem, sempre com o SHA exato. Durante a implantação, o Render só troca o tráfego depois que a nova instância estiver pronta. Configure somente `MONGODB_URI` no painel; o Render gera `JWT_SECRET` automaticamente com alta entropia, e a aplicação recusa chaves de exemplo.
 
 Use plano sempre ativo para evitar cold starts e interrupções de chamadas. A mídia P2P não passa pelo Render; a API hospeda apenas REST/Socket.IO. Não é necessário nem adequado tentar rodar coturn UDP dentro deste serviço web.
 

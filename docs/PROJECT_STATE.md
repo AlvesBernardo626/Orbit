@@ -11,8 +11,8 @@
 - **Storage**: S3-compatible (MinIO para dev)
 
 ## Status e Fase Atual
-**Fase Atual**: FASE 1 - Foundation (Concluída) / Preparação FASE 2
-**Status**: Monorepo inicializado. Backend, Frontend e Packages configurados.
+**Fase Atual**: FASE 2 - Infraestrutura Pública (Concluída) / Preparação FASE 3
+**Status**: Render configurado via `render.yaml`, variáveis de ambiente, conectividade cliente-servidor nativo via CORS.
 
 ## Funcionalidades Completas
 - Nenhum código implementado ainda.
@@ -20,7 +20,7 @@
 ## Pendências e Backlog por Fases
 - [x] **FASE 0**: Arquitetura, documentação base e workspace rules.
 - [x] **FASE 1**: Foundation (Monorepo, Electron, React, API, MongoDB, configuração, lint, testes).
-- [ ] **FASE 2**: Infraestrutura pública inicial (preparar Render, envs).
+- [x] **FASE 2**: Infraestrutura pública inicial (preparar Render, envs).
 - [ ] **FASE 3**: Auth + Profiles (register, login, sessões).
 - [ ] **FASE 4**: Social (amizades, presence).
 - [ ] **FASE 5**: Messaging (DMs, grupos, realtime textual).
@@ -36,12 +36,12 @@
 - N/A
 
 ## Último Checkpoint
-- Fase 1 (Foundation) base configurada e testada.
+- Fase 2 concluída: conectividade e `render.yaml` implementados.
 
 ## Decisões Importantes
 - Ver `docs/DECISIONS.md`.
 
 ## Próximos 3 Passos
-1. Iniciar repositório Git e fazer o commit do scaffold inicial.
-2. Preparar infraestrutura para o backend público.
-3. Avançar para a Fase 2.
+1. Concluir commit git da Fase 2.
+2. Iniciar Fase 3 (Auth + Profiles).
+3. Configurar schema do Mongoose de User/Profile.

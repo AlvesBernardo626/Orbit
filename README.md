@@ -16,11 +16,12 @@ npm run dev
 ## Funcionalidades implementadas
 
 - Contas, bcrypt, JWT, refresh com rotação e revogação; refresh protegido por Electron safeStorage.
-- Perfil editável, avatar/banner por URL HTTPS, bio e status.
+- Perfil editável, avatar/banner escolhidos localmente, bio e status; imagens locais nos grupos.
 - Solicitações, amizades, bloqueio e DMs com histórico, edição, exclusão, digitação, não lidas e paginação.
 - Grupos de até 8 pessoas, proprietário/administradores/membros, transferência de propriedade e moderação.
 - Presença e eventos via Socket.IO com autorização no servidor.
-- Voz P2P, mute, troca de microfone/saída, detecção de fala e recuperação de conexão.
+- Voz P2P com convite, toque, atendimento/recusa e tela ativa; mute, troca de microfone/saída,
+  detecção de fala e recuperação de conexão.
 - Escolha de tela/janela, transmissão com presets 720p/15, 1080p/30 e 1080p/60, controle de bitrate e encerramento da captura.
 - Docker, CI, Blueprint Render, health checks e índices MongoDB.
 - Deploy automático no Render, distribuição por GitHub Releases e atualização automática do desktop.

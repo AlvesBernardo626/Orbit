@@ -16,9 +16,9 @@
 
 ## Operação
 
-A conta criada não possui e-mail verificado. Recuperação é uma extensão preparada (modelo com token hash e TTL, endpoint de resposta uniforme), mas não emite tokens nem simula entrega de e-mail. Uploads não estão habilitados; quando adicionados, exigir allowlist de MIME/extensão, assinatura binária, limite de tamanho, chave de objeto aleatória, antivírus quando aplicável e armazenamento privado com autorização.
+A conta criada não possui e-mail verificado. Recuperação é uma extensão preparada (modelo com token hash e TTL, endpoint de resposta uniforme), mas não emite tokens nem simula entrega de e-mail. Uploads de anexos e arquivos arbitrários não estão habilitados; quando adicionados, exigir allowlist de MIME/extensão, assinatura binária, limite de tamanho, chave de objeto aleatória, antivírus quando aplicável e armazenamento privado com autorização.
 
-Avatares/banners/imagens de grupo usam URLs HTTPS externas e `referrerPolicy=no-referrer`; a origem da imagem pode observar o IP do cliente. Remova as URLs para voltar ao avatar gerado por iniciais. Não há proxy de imagem no servidor.
+Novos avatares, banners e imagens de grupo são recortados, redimensionados e convertidos para WebP no cliente antes de serem persistidos. Data URLs aceitas são limitadas a PNG, JPEG e WebP; SVG e formatos executáveis são rejeitados. URLs HTTPS legadas continuam aceitas com `referrerPolicy=no-referrer`; a origem externa pode observar o IP do cliente. Não há proxy de imagem no servidor.
 
 As mensagens são protegidas por TLS em trânsito; não são criptografadas de ponta a ponta no banco. WebRTC protege mídia em trânsito (DTLS-SRTP). P2P pode revelar IPs aos participantes: use `ICE_RELAY_ONLY=true` para forçar TURN. Não prometer anonimato nem criptografia ponta a ponta das mensagens.
 

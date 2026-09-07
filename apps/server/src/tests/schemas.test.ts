@@ -3,6 +3,7 @@ import {
   registerSchema,
   messageSchema,
   profileSchema,
+  groupSchema,
   signalSchema,
   canManage,
 } from '@orbit/shared';
@@ -42,6 +43,22 @@ describe('contratos e permissões', () => {
     ).toBe(true);
     expect(profileSchema.parse({ profileColor: '#7C3AED' }).profileColor).toBe('#7c3aed');
     expect(profileSchema.safeParse({ profileColor: 'purple' }).success).toBe(false);
+  });
+  it('aceita imagem local segura em grupos e rejeita SVG', () => {
+    expect(
+      groupSchema.safeParse({
+        name: 'Amigos',
+        image: 'data:image/webp;base64,UklGRg==',
+        members: [],
+      }).success,
+    ).toBe(true);
+    expect(
+      groupSchema.safeParse({
+        name: 'Amigos',
+        image: 'data:image/svg+xml;base64,PHN2Zz4=',
+        members: [],
+      }).success,
+    ).toBe(false);
   });
   it('limita mensagens e envelopes de signaling', () => {
     expect(

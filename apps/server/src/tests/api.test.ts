@@ -311,15 +311,25 @@ describe('grupos e permissões', () => {
     ).body;
   });
   it('cria grupo e impede membro de administrar', async () => {
+    const localImage = 'data:image/webp;base64,UklGRg==';
     const group = (
       await request(app)
         .post('/api/groups')
         .set('Authorization', `Bearer ${alice.accessToken}`)
-        .send({ name: 'Amigos', members: [bob.user.id] })
+        .send({ name: 'Amigos', image: localImage, members: [bob.user.id] })
         .expect(201)
     ).body;
     groupId = group.id;
     conversationId = group.conversationId;
+    const conversations = (
+      await request(app)
+        .get('/api/conversations')
+        .set('Authorization', `Bearer ${alice.accessToken}`)
+        .expect(200)
+    ).body;
+    expect(conversations.find((item: { id: string }) => item.id === conversationId).image).toBe(
+      localImage,
+    );
     await request(app)
       .patch(`/api/groups/${groupId}`)
       .set('Authorization', `Bearer ${bob.accessToken}`)
@@ -440,8 +450,32 @@ describe('Socket.IO: isolamento, signaling e revogação', () => {
   it('não membro não entra nem envia digitação; membro entra', async () => {
     expect((await ack(third, 'call:join', { conversationId: room })).ok).toBe(false);
     expect((await ack(third, 'typing', { conversationId: room })).ok).toBe(false);
-    expect((await ack(first, 'call:join', { conversationId: room })).ok).toBe(true);
-    expect((await ack(second, 'call:join', { conversationId: room })).ok).toBe(true);
+    const incoming = new Promise<{ conversationId: string; callerId: string }>((resolve) =>
+      second.once('call:incoming', resolve),
+    );
+    expect((await ack(first, 'call:join', { conversationId: room, announce: true })).ok).toBe(true);
+    expect(await incoming).toMatchObject({ conversationId: room, callerId: userA.user.id });
+
+    const declined = new Promise<{ userId: string; final: boolean }>((resolve) =>
+      first.once('call:declined', resolve),
+    );
+    expect((await ack(second, 'call:decline', { conversationId: room })).ok).toBe(true);
+    expect(await declined).toMatchObject({ userId: userB.user.id, final: true });
+
+    expect((await ack(first, 'call:leave', {})).ok).toBe(true);
+    const reinvited = new Promise<void>((resolve) => second.once('call:incoming', () => resolve()));
+    const cancelled = new Promise<{ conversationId: string }>((resolve) =>
+      second.once('call:cancelled', resolve),
+    );
+    expect((await ack(first, 'call:join', { conversationId: room, announce: true })).ok).toBe(true);
+    await reinvited;
+    expect((await ack(first, 'call:leave', {})).ok).toBe(true);
+    expect(await cancelled).toMatchObject({ conversationId: room });
+
+    expect((await ack(first, 'call:join', { conversationId: room, announce: true })).ok).toBe(true);
+    expect((await ack(second, 'call:join', { conversationId: room, announce: false })).ok).toBe(
+      true,
+    );
   });
   it('sinaliza apenas entre participantes da mesma chamada', async () => {
     const received = new Promise<{ from: string }>((resolve) =>

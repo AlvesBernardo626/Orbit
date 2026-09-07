@@ -35,6 +35,9 @@ const localProfileImageSchema = z
     'Formato de imagem inválido',
   );
 export const profileImageSchema = z.union([imageSchema, localProfileImageSchema]);
+// Keep accepting existing HTTPS group images while allowing the desktop app to
+// persist locally selected, resized images in the same safe formats as avatars.
+export const groupImageSchema = profileImageSchema;
 export const profileColorSchema = z
   .string()
   .trim()
@@ -64,7 +67,7 @@ export const messageSchema = z.object({ content: text(4000).min(1), clientId: z.
 export const groupSchema = z
   .object({
     name: text(64).min(1),
-    image: imageSchema.default(''),
+    image: groupImageSchema.default(''),
     members: z.array(idSchema).max(MAX_MEMBERS - 1),
   })
   .strict();
@@ -151,6 +154,11 @@ export interface CallPeer {
   userId: string;
   muted: boolean;
   sharing: boolean;
+}
+export interface IncomingCall {
+  conversationId: string;
+  callerId: string;
+  startedAt: number;
 }
 export type Signal = z.infer<typeof signalSchema>;
 export type Ack<T = Record<string, never>> = (

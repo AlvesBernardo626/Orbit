@@ -85,7 +85,7 @@ export function Participant({
   const speaking = useSpeaking(stream, peer.muted);
   return (
     <div className={`call-person ${speaking ? 'speaking' : ''}`}>
-      <Avatar user={user ?? { displayName: '?', avatar: '', status: 'offline' }} />
+      <Avatar user={user ?? { displayName: '?', avatar: '', status: 'offline' }} size="large" />
       <span>
         {user?.displayName ?? 'Participante'}
         {local ? ' (você)' : ''}

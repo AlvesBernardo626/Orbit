@@ -8,10 +8,10 @@ describe('ciclo de vida da mídia', () => {
     const off = vi.fn().mockReturnThis();
     const socket = { on, off, connected: false } as unknown as Socket;
     const transport = new MeshTransport(socket);
-    expect(on).toHaveBeenCalledTimes(5);
+    expect(on).toHaveBeenCalledTimes(7);
     transport.dispose();
     transport.dispose();
-    expect(off).toHaveBeenCalledTimes(5);
+    expect(off).toHaveBeenCalledTimes(7);
     expect(transport.snapshot().phase).toBe('idle');
   });
   it('encerra captura recebida depois da saída', async () => {

@@ -1,9 +1,10 @@
-export type ProfileImageKind = 'avatar' | 'banner';
+export type ProfileImageKind = 'avatar' | 'banner' | 'group';
 
 const MAX_SOURCE_BYTES = 12 * 1024 * 1024;
 const supportedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const settings = {
   avatar: { width: 512, height: 512, maxBytes: 500 * 1024 },
+  group: { width: 512, height: 512, maxBytes: 500 * 1024 },
   banner: { width: 1200, height: 400, maxBytes: 1200 * 1024 },
 } as const;
 

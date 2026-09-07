@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { ImagePlus, Trash2 } from 'lucide-react';
 import type { Bootstrap, Conversation } from '@orbit/shared';
 import { groupSchema, MAX_MEMBERS, canManage } from '@orbit/shared';
 import { mutation } from '../lib/api';
+import { prepareProfileImage } from '../lib/profileImages';
 import { Modal, Field, Avatar } from './ui';
 export function GroupModal({
   data,
@@ -17,6 +19,8 @@ export function GroupModal({
   onError: (s: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [image, setImage] = useState(conversation?.image ?? '');
   const role = conversation?.members.find((m) => m.user.id === data.me.id)?.role;
   const manage = !conversation || role === 'owner' || role === 'admin';
   const candidates = data.friends.filter(
@@ -38,18 +42,20 @@ export function GroupModal({
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     if (conversation) {
-      await run(() =>
-        mutation(
-          `/groups/${conversation.groupId}`,
-          { name: form.get('name'), image: form.get('image') },
-          'PATCH',
-        ),
-      );
+      const parsed = groupSchema.pick({ name: true, image: true }).safeParse({
+        name: form.get('name'),
+        image,
+      });
+      if (!parsed.success) {
+        onError(parsed.error.issues[0]!.message);
+        return;
+      }
+      await run(() => mutation(`/groups/${conversation.groupId}`, parsed.data, 'PATCH'));
       return;
     }
     const parsed = groupSchema.safeParse({
       name: form.get('name'),
-      image: form.get('image'),
+      image,
       members: form.getAll('members'),
     });
     if (!parsed.success) {
@@ -67,6 +73,19 @@ export function GroupModal({
       setBusy(false);
     }
   }
+  async function selectImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      setImage(await prepareProfileImage(file, 'group'));
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
   const memberAction = (userId: string, action: string) =>
     run(() => mutation(`/groups/${conversation!.groupId}/members`, { userId, action }));
   return (
@@ -81,14 +100,43 @@ export function GroupModal({
             disabled={!manage}
           />
         </Field>
-        <Field label="Imagem (URL HTTPS)">
-          <input
-            name="image"
-            defaultValue={conversation?.image ?? ''}
-            maxLength={2048}
-            disabled={!manage}
-          />
-        </Field>
+        <div className="group-image-field">
+          <span>Imagem do grupo</span>
+          <div className="group-image-editor">
+            <div className="upload-preview group-upload">
+              {image ? (
+                <img src={image} alt="Prévia da imagem do grupo" />
+              ) : (
+                <ImagePlus size={26} />
+              )}
+            </div>
+            {manage && (
+              <div className="group-image-actions">
+                <label className="upload-button">
+                  <ImagePlus size={15} />
+                  {uploading ? 'Processando…' : image ? 'Trocar imagem' : 'Escolher imagem'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={busy || uploading}
+                    onChange={(event) => void selectImage(event)}
+                  />
+                </label>
+                {image && (
+                  <button
+                    type="button"
+                    className="icon"
+                    aria-label="Remover imagem do grupo"
+                    onClick={() => setImage('')}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+                <small>PNG, JPEG ou WebP · até 12 MB</small>
+              </div>
+            )}
+          </div>
+        </div>
         {!conversation && (
           <fieldset>
             <legend>Convide amigos · até {MAX_MEMBERS - 1}</legend>
@@ -105,7 +153,7 @@ export function GroupModal({
           </fieldset>
         )}
         {manage && (
-          <button className="primary" disabled={busy}>
+          <button className="primary" disabled={busy || uploading}>
             {conversation ? 'Salvar alterações' : 'Criar grupo'}
           </button>
         )}

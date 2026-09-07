@@ -183,7 +183,7 @@ export function ChatView({
         <div className="header-actions">
           <button className="primary compact" onClick={onCall}>
             <Headphones size={17} />
-            Entrar na chamada
+            {conversation.kind === 'dm' ? 'Ligar' : 'Entrar na chamada'}
           </button>
           {conversation.kind === 'group' && (
             <button

@@ -45,6 +45,8 @@ export class MeshTransport implements MediaTransport {
     socket.on('disconnect', this.onDisconnect);
     socket.on('connect', this.onReconnect);
     socket.on('call:ended', this.onEnded);
+    socket.on('call:declined', this.onDeclined);
+    socket.on('call:no-answer', this.onNoAnswer);
   }
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -74,7 +76,7 @@ export class MeshTransport implements MediaTransport {
         this.fail,
       );
   }
-  async join(conversationId: string, deviceId?: string) {
+  async join(conversationId: string, deviceId?: string, announce = true) {
     this.leave();
     const generation = ++this.generation;
     this.update({ conversationId, phase: 'joining', error: '' });
@@ -97,7 +99,10 @@ export class MeshTransport implements MediaTransport {
       this.update({ microphone: mic });
       this.config = await api<IceConfig>('/rtc/config');
       if (generation !== this.generation) return;
-      const result = await this.emit<{ peers: CallPeer[] }>('call:join', { conversationId });
+      const result = await this.emit<{ peers: CallPeer[] }>('call:join', {
+        conversationId,
+        announce,
+      });
       if (generation !== this.generation) return;
       this.update({ phase: 'connected' });
       this.onPeers({ conversationId, peers: result.peers });
@@ -301,6 +306,25 @@ export class MeshTransport implements MediaTransport {
     this.leave();
     this.update({ error: reason });
   };
+  private onDeclined = ({
+    conversationId,
+    final,
+  }: {
+    conversationId: string;
+    userId: string;
+    final: boolean;
+  }) => {
+    if (this.state.conversationId !== conversationId) return;
+    if (final) this.leave();
+    this.update({
+      error: final ? 'A chamada foi recusada.' : 'Um participante recusou a chamada.',
+    });
+  };
+  private onNoAnswer = ({ conversationId }: { conversationId: string }) => {
+    if (this.state.conversationId !== conversationId) return;
+    this.leave();
+    this.update({ error: 'A chamada não foi atendida.' });
+  };
   mute(value: boolean) {
     this.state.microphone?.getAudioTracks().forEach((t) => {
       t.enabled = !value;
@@ -430,7 +454,9 @@ export class MeshTransport implements MediaTransport {
       .off('call:signal', this.onSignal)
       .off('disconnect', this.onDisconnect)
       .off('connect', this.onReconnect)
-      .off('call:ended', this.onEnded);
+      .off('call:ended', this.onEnded)
+      .off('call:declined', this.onDeclined)
+      .off('call:no-answer', this.onNoAnswer);
     this.listeners.clear();
   }
 }

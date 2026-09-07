@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { Orbit, Hash, MessageCircle } from 'lucide-react';
-import type { Conversation, User } from '@orbit/shared';
+import type { Conversation, IncomingCall, User } from '@orbit/shared';
 import { useSocket } from '../hooks/useSocket';
 import { useBootstrap } from '../hooks/useBootstrap';
 import { signOut, mutation } from '../lib/api';
@@ -13,6 +13,7 @@ import { CallPanel } from './CallPanel';
 import { Empty } from './ui';
 import { Navigation } from './Navigation';
 import { DetailsPanel } from './DetailsPanel';
+import { IncomingCallCard } from './IncomingCall';
 export default function Workspace() {
   const { socket, connected } = useSocket();
   const { data, error, reload } = useBootstrap(socket);
@@ -22,11 +23,30 @@ export default function Workspace() {
   const [group, setGroup] = useState<Conversation | 'new' | null>(null);
   const [toast, setToast] = useState('');
   const [transport, setTransport] = useState<MeshTransport | null>(null);
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const onError = useCallback((message: string) => setToast(message), []);
   useEffect(() => {
     const media = new MeshTransport(socket);
     setTransport(media);
     return () => media.dispose();
+  }, [socket]);
+  useEffect(() => {
+    const incoming = (call: IncomingCall) => setIncomingCall(call);
+    const dismiss = ({ conversationId }: { conversationId: string }) =>
+      setIncomingCall((current) => (current?.conversationId === conversationId ? null : current));
+    const disconnected = () => setIncomingCall(null);
+    socket
+      .on('call:incoming', incoming)
+      .on('call:cancelled', dismiss)
+      .on('call:answered', dismiss)
+      .on('disconnect', disconnected);
+    return () => {
+      socket
+        .off('call:incoming', incoming)
+        .off('call:cancelled', dismiss)
+        .off('call:answered', dismiss)
+        .off('disconnect', disconnected);
+    };
   }, [socket]);
   useEffect(() => {
     if (!toast) return;
@@ -35,7 +55,9 @@ export default function Workspace() {
   }, [toast]);
   const open = (id: string) => {
     setActive(id);
-    setSection('messages');
+    setSection(
+      data?.conversations.find((c) => c.id === id)?.kind === 'group' ? 'groups' : 'messages',
+    );
   };
   if (!data)
     return (
@@ -148,7 +170,40 @@ export default function Workspace() {
           }}
           onError={onError}
         />
-      )}{' '}
+      )}
+      {incomingCall &&
+        (() => {
+          const conversation = data.conversations.find((c) => c.id === incomingCall.conversationId);
+          const caller = conversation?.members.find(
+            (member) => member.user.id === incomingCall.callerId,
+          )?.user;
+          if (!conversation || !caller || data.blocked.some((user) => user.id === caller.id))
+            return null;
+          return (
+            <IncomingCallCard
+              caller={caller}
+              conversation={conversation}
+              onAccept={() => {
+                setIncomingCall(null);
+                setActive(conversation.id);
+                setSection(conversation.kind === 'group' ? 'groups' : 'messages');
+                if (transport) void transport.join(conversation.id, undefined, false);
+              }}
+              onDecline={async () => {
+                try {
+                  const result = (await socket.timeout(5000).emitWithAck('call:decline', {
+                    conversationId: conversation.id,
+                  })) as { ok: boolean; error?: string };
+                  if (!result.ok)
+                    throw new Error(result.error || 'Não foi possível recusar a chamada.');
+                  setIncomingCall(null);
+                } catch (e) {
+                  onError((e as Error).message);
+                }
+              }}
+            />
+          );
+        })()}
       {(toast || error) && (
         <div className="toast" role="alert">
           <span>{toast || error}</span>

@@ -20,6 +20,16 @@ export function attachSockets(server: HttpServer) {
   });
   const calls = new Map<string, Map<string, CallPeer>>();
   const locations = new Map<string, string>();
+  const invitations = new Map<
+    string,
+    {
+      callerId: string;
+      callerSocketId: string;
+      recipients: Set<string>;
+      kind: 'dm' | 'group';
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   let mutations: Promise<unknown> = Promise.resolve();
   const serialize = <T>(fn: () => Promise<T>) => {
     const next = mutations.then(fn);
@@ -31,16 +41,33 @@ export function attachSockets(server: HttpServer) {
     for (const p of peers(id))
       io.to(p.socketId).emit('call:peers', { conversationId: id, peers: peers(id) });
   };
+  const deliver = ({ users, event, data }: { users: string[]; event: string; data: unknown }) => {
+    for (const id of users) io.to(`user:${id}`).emit(event, data);
+  };
+  const clearInvitation = (conversationId: string, reason?: string) => {
+    const invitation = invitations.get(conversationId);
+    if (!invitation) return;
+    clearTimeout(invitation.timer);
+    invitations.delete(conversationId);
+    if (reason && invitation.recipients.size)
+      deliver({
+        users: [...invitation.recipients],
+        event: 'call:cancelled',
+        data: { conversationId, reason },
+      });
+  };
   const leave = (socketId: string) => {
     const id = locations.get(socketId);
     if (!id) return;
+    if (invitations.get(id)?.callerSocketId === socketId)
+      clearInvitation(id, 'A chamada foi encerrada.');
     calls.get(id)?.delete(socketId);
     locations.delete(socketId);
     broadcast(id);
-    if (!calls.get(id)?.size) calls.delete(id);
-  };
-  const deliver = ({ users, event, data }: { users: string[]; event: string; data: unknown }) => {
-    for (const id of users) io.to(`user:${id}`).emit(event, data);
+    if (!calls.get(id)?.size) {
+      calls.delete(id);
+      clearInvitation(id, 'A chamada foi encerrada.');
+    }
   };
   const evict = ({ users, conversationId }: { users: string[]; conversationId?: string }) => {
     for (const [socketId, id] of locations) {
@@ -51,6 +78,21 @@ export function attachSockets(server: HttpServer) {
           reason: 'Sua participação na chamada foi encerrada.',
         });
       }
+    }
+    for (const [id, invitation] of invitations) {
+      if (conversationId && conversationId !== id) continue;
+      if (users.includes(invitation.callerId)) {
+        clearInvitation(id, 'A chamada foi encerrada.');
+        continue;
+      }
+      const removed = users.filter((user) => invitation.recipients.delete(user));
+      if (removed.length)
+        deliver({
+          users: removed,
+          event: 'call:cancelled',
+          data: { conversationId: id, reason: 'Chamada indisponível.' },
+        });
+      if (!invitation.recipients.size) clearInvitation(id);
     }
   };
   const queuedEvict = (input: Parameters<typeof evict>[0]) => {
@@ -123,9 +165,13 @@ export function attachSockets(server: HttpServer) {
     });
     handle('call:join', (input) =>
       serialize(async () => {
-        const { conversationId } = z.object({ conversationId: idSchema }).strict().parse(input);
-        await membership(userId, conversationId, true);
+        const { conversationId, announce } = z
+          .object({ conversationId: idSchema, announce: z.boolean().default(false) })
+          .strict()
+          .parse(input);
+        const conversation = await membership(userId, conversationId, true);
         const existing = peers(conversationId);
+        const starting = existing.length === 0;
         ensure(
           existing.length < MAX_MEMBERS || locations.get(socket.id) === conversationId,
           409,
@@ -144,7 +190,64 @@ export function attachSockets(server: HttpServer) {
           .set(socket.id, { socketId: socket.id, userId, muted: false, sharing: false });
         locations.set(socket.id, conversationId);
         broadcast(conversationId);
+        const pending = invitations.get(conversationId);
+        if (pending?.recipients.delete(userId)) {
+          io.to(`user:${userId}`).emit('call:answered', { conversationId });
+          if (!pending.recipients.size) clearInvitation(conversationId);
+        }
+        if (starting && announce) {
+          const recipients = new Set(
+            conversation.participants.map(String).filter((id) => id !== userId),
+          );
+          clearInvitation(conversationId, 'Uma nova chamada foi iniciada.');
+          const timer = setTimeout(() => {
+            const invitation = invitations.get(conversationId);
+            if (!invitation) return;
+            invitations.delete(conversationId);
+            deliver({
+              users: [...invitation.recipients],
+              event: 'call:cancelled',
+              data: { conversationId, reason: 'Chamada não atendida.' },
+            });
+            if (invitation.kind === 'dm')
+              io.to(invitation.callerSocketId).emit('call:no-answer', { conversationId });
+          }, 45_000);
+          invitations.set(conversationId, {
+            callerId: userId,
+            callerSocketId: socket.id,
+            recipients,
+            kind: conversation.kind as 'dm' | 'group',
+            timer,
+          });
+          deliver({
+            users: [...recipients],
+            event: 'call:incoming',
+            data: { conversationId, callerId: userId, startedAt: Date.now() },
+          });
+        }
         return { peers: peers(conversationId) };
+      }),
+    );
+    handle('call:decline', (input) =>
+      serialize(async () => {
+        const { conversationId } = z.object({ conversationId: idSchema }).strict().parse(input);
+        await membership(userId, conversationId, true);
+        const invitation = invitations.get(conversationId);
+        ensure(invitation, 404, 'Chamada indisponível');
+        ensure(invitation.recipients.has(userId), 404, 'Chamada indisponível');
+        invitation.recipients.delete(userId);
+        io.to(`user:${userId}`).emit('call:cancelled', {
+          conversationId,
+          reason: 'Chamada recusada.',
+        });
+        const final = invitation.kind === 'dm' || invitation.recipients.size === 0;
+        io.to(invitation.callerSocketId).emit('call:declined', {
+          conversationId,
+          userId,
+          final,
+        });
+        if (final) clearInvitation(conversationId);
+        return {};
       }),
     );
     handle('call:leave', async () => {
@@ -195,6 +298,8 @@ export function attachSockets(server: HttpServer) {
   };
   events.on('revoke', revoke);
   const cleanup = () => {
+    for (const invitation of invitations.values()) clearTimeout(invitation.timer);
+    invitations.clear();
     events.off('deliver', deliver);
     events.off('evict', queuedEvict);
     events.off('revoke', revoke);

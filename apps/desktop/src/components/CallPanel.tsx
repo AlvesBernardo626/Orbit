@@ -1,12 +1,11 @@
 import { Media, Participant, Screen } from './CallMedia';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Mic, MicOff, Monitor, PhoneOff, Settings, Volume2 } from 'lucide-react';
 import type { CallPeer, Conversation, User } from '@orbit/shared';
 import type { MediaTransport, RemoteMedia } from '../media/types';
 import { qualities } from '../media/types';
 import { captureScreen } from '../media/capture';
 import { Field, Modal } from './ui';
-import callRingtone from '../assets/call-ringtone.mp3';
 export function CallPanel({
   transport,
   conversation,
@@ -31,37 +30,6 @@ export function CallPanel({
     ReturnType<NonNullable<typeof window.orbit>['capabilities']>
   > | null>(null);
   const [screenPermissionMissing, setScreenPermissionMissing] = useState(false);
-  const ringtone = useRef<HTMLAudioElement | null>(null);
-  const ringtoneStartedAt = useRef(0);
-  useEffect(() => {
-    if (state.phase === 'joining' && !ringtone.current) {
-      const player = new Audio(callRingtone);
-      ringtone.current = player;
-      ringtoneStartedAt.current = performance.now();
-      player.loop = true;
-      player.volume = 0.38;
-      void player.play().catch(() => undefined);
-      return;
-    }
-    if (state.phase === 'joining' || !ringtone.current) return;
-    const player = ringtone.current;
-    const delay =
-      state.phase === 'connected'
-        ? Math.max(0, 1800 - (performance.now() - ringtoneStartedAt.current))
-        : 0;
-    const timer = window.setTimeout(() => {
-      player.pause();
-      player.currentTime = 0;
-      if (ringtone.current === player) ringtone.current = null;
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [state.phase]);
-  useEffect(() => {
-    return () => {
-      ringtone.current?.pause();
-      ringtone.current = null;
-    };
-  }, []);
   useEffect(() => {
     if (window.orbit)
       void window.orbit
@@ -144,56 +112,64 @@ export function CallPanel({
     ) : null;
   const remoteFor = (p: CallPeer): RemoteMedia | undefined =>
     state.remote.find((r) => r.socketId === p.socketId);
+  const waitingForAnswer =
+    conversation?.kind === 'dm' &&
+    state.phase === 'connected' &&
+    !state.peers.some((peer) => peer.userId !== me.id);
   return (
     <section className="call-panel">
       <div className="call-heading">
         <div>
           <i className="live-dot" />
           <strong>
-            {state.phase === 'connected'
-              ? 'Vocês estão conectados'
-              : state.phase === 'reconnecting'
-                ? 'Reconectando…'
-                : state.phase === 'joining'
-                  ? 'Chamando…'
-                  : 'Conectando áudio…'}
+            {waitingForAnswer
+              ? 'Aguardando a outra pessoa atender…'
+              : state.phase === 'connected'
+                ? 'Chamada em andamento'
+                : state.phase === 'reconnecting'
+                  ? 'Reconectando…'
+                  : state.phase === 'joining'
+                    ? 'Chamando…'
+                    : 'Conectando áudio…'}
           </strong>
           <span className="muted">{conversation?.name || 'Chamada de voz'}</span>
         </div>
         <span className="small muted">{state.peers.length}/8 pessoas</span>
       </div>
-      <div className="call-people">
-        {state.peers.map((peer) => (
-          <Participant
-            key={peer.socketId}
-            peer={peer}
-            user={conversation?.members.find((m) => m.user.id === peer.userId)?.user}
-            stream={peer.userId === me.id ? state.microphone : (remoteFor(peer)?.voice ?? null)}
-            local={peer.userId === me.id}
-          />
+      <div className="call-stage">
+        <div className="call-people">
+          {state.peers.map((peer) => (
+            <Participant
+              key={peer.socketId}
+              peer={peer}
+              user={conversation?.members.find((m) => m.user.id === peer.userId)?.user}
+              stream={peer.userId === me.id ? state.microphone : (remoteFor(peer)?.voice ?? null)}
+              local={peer.userId === me.id}
+            />
+          ))}
+        </div>
+        {state.remote.map((remote) => (
+          <Media key={remote.socketId} stream={remote.voice} output={output} />
         ))}
-      </div>
-      {state.remote.map((remote) => (
-        <Media key={remote.socketId} stream={remote.voice} output={output} />
-      ))}
-      <div className="screens">
-        {state.localScreen && (
-          <Screen stream={state.localScreen} title="Sua transmissão" local output={output} />
-        )}{' '}
-        {state.peers
-          .filter((p) => p.sharing && p.userId !== me.id)
-          .map((p) => {
-            const remote = remoteFor(p);
-            return remote ? (
-              <Screen
-                key={p.socketId}
-                stream={remote.screen}
-                title={`${conversation?.members.find((m) => m.user.id === p.userId)?.user.displayName ?? 'Participante'} está transmitindo`}
-                local={false}
-                output={output}
-              />
-            ) : null;
-          })}
+        <div className="screens">
+          {state.localScreen && (
+            <Screen stream={state.localScreen} title="Sua transmissão" local output={output} />
+          )}{' '}
+          {state.peers
+            .filter((p) => p.sharing && p.userId !== me.id)
+            .map((p) => {
+              const remote = remoteFor(p);
+              return remote ? (
+                <Screen
+                  key={p.socketId}
+                  stream={remote.screen}
+                  title={`${conversation?.members.find((m) => m.user.id === p.userId)?.user.displayName ?? 'Participante'} está transmitindo`}
+                  local={false}
+                  output={output}
+                />
+              ) : null;
+            })}
+        </div>
       </div>
       {state.error && (
         <p className="error" role="alert">

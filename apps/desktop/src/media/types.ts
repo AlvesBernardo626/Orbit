@@ -31,7 +31,7 @@ export interface CallSnapshot {
 export interface MediaTransport {
   subscribe(fn: () => void): () => void;
   snapshot(): CallSnapshot;
-  join(conversationId: string, deviceId?: string): Promise<void>;
+  join(conversationId: string, deviceId?: string, announce?: boolean): Promise<void>;
   leave(): void;
   mute(value: boolean): void;
   setMicrophone(deviceId: string): Promise<void>;

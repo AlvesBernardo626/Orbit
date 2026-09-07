@@ -1,12 +1,35 @@
 const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
 
+function apiOrigin(apiUrl: string) {
+  try {
+    return new URL(apiUrl).origin;
+  } catch {
+    return apiUrl;
+  }
+}
+
+export async function readJsonResponse<T>(response: Response, apiUrl: string): Promise<T> {
+  const body = await response.text();
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    const origin = apiOrigin(apiUrl);
+    const html = /^\s*(?:<!doctype|<html)/i.test(body);
+    throw new Error(
+      html
+        ? `O endereço ${origin} respondeu uma página HTML em vez da API do Orbit (HTTP ${response.status}). Instale a versão mais recente do aplicativo ou contate o administrador.`
+        : `O servidor do Orbit em ${origin} retornou uma resposta inválida (HTTP ${response.status}).`,
+    );
+  }
+}
+
 export function friendlyNetworkError(error: unknown, apiUrl: string) {
   const raw = error instanceof Error ? error.message : String(error);
   let origin = apiUrl;
   let hostname = apiUrl;
   try {
     const url = new URL(apiUrl);
-    origin = url.origin;
+    origin = apiOrigin(apiUrl);
     hostname = url.hostname;
   } catch {
     // The build validates this value; retain it only to make a malformed development config clear.

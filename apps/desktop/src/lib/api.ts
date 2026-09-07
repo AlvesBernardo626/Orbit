@@ -1,5 +1,5 @@
 import type { AuthResult, Session } from '@orbit/shared';
-import { friendlyNetworkError } from './networkErrors';
+import { friendlyNetworkError, readJsonResponse } from './networkErrors';
 export const API = import.meta.env.VITE_API_URL as string;
 let session: Session | null = null;
 let browserRefresh: string | null = null;
@@ -48,7 +48,7 @@ async function action(
     body: JSON.stringify(action === 'refresh' ? { refreshToken: browserRefresh } : data),
     signal: AbortSignal.timeout(15000),
   });
-  const result = await response.json();
+  const result = await readJsonResponse<AuthResult & { error?: string }>(response, API);
   if (!response.ok) {
     if (response.status === 401) browserRefresh = null;
     throw new ApiError(response.status, result.error ?? 'Falha na autenticação');
@@ -115,11 +115,11 @@ export async function api<T>(
     response = await request();
   }
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
+    const data = await readJsonResponse<{ error?: string }>(response, API);
     throw new ApiError(response.status, data.error ?? 'Falha na conexão');
   }
   if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  return readJsonResponse<T>(response, API);
 }
 export const mutation = <T>(path: string, body?: unknown, method = 'POST') =>
   api<T>(path, { method, body });

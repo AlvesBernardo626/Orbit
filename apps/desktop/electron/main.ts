@@ -16,7 +16,8 @@ import { readFile, writeFile, unlink, rename } from 'node:fs/promises';
 import { join, resolve, extname, relative, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loginSchema, registerSchema } from '@orbit/shared';
-import { friendlyNetworkError } from '../src/lib/networkErrors';
+import type { AuthResult } from '@orbit/shared';
+import { friendlyNetworkError, readJsonResponse } from '../src/lib/networkErrors';
 const appId = 'app.orbit.desktop';
 const api = process.env.ORBIT_API_URL!;
 const dev = process.env.ORBIT_DEV_URL;
@@ -172,7 +173,7 @@ async function auth(action: string, data: unknown) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const result = await response.json();
+  const result = await readJsonResponse<AuthResult & { error?: string }>(response, api);
   if (!response.ok) {
     if (action === 'refresh' && response.status === 401) {
       await unlink(tokenFile()).catch(() => undefined);

@@ -1,25 +1,63 @@
 {
-  "name": "@relay/desktop",
+  "name": "@orbit/desktop",
   "version": "0.1.0",
   "private": true,
-  "main": "dist-electron/main.js",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "lint": "eslint src/"
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@orbit/shared": "*",
+    "lucide-react": "^1.41.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "socket.io-client": "^4.8.3"
+  },
+  "build": {
+    "appId": "app.orbit.desktop",
+    "productName": "Orbit",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.social-networking",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "O Orbit usa o microfone nas chamadas que voc\u00ea inicia.",
+        "NSScreenCaptureUsageDescription": "O Orbit compartilha a tela ou janela que voc\u00ea escolher.",
+        "NSAudioCaptureUsageDescription": "O Orbit captura o \u00e1udio do sistema somente quando voc\u00ea ativa essa op\u00e7\u00e3o ao compartilhar a tela."
+      }
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "electron": "^31.2.1",
-    "electron-builder": "^24.13.3",
-    "typescript": "^5.5.4",
-    "vite": "^5.3.4",
-    "vite-plugin-electron": "^0.28.7",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3",
+    "vite": "^8.2.2",
+    "vite-plugin-electron": "^1.1.2"
   }
 }

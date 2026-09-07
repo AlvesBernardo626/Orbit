@@ -1,25 +1,44 @@
 {
-  "name": "relay-monorepo",
+  "name": "orbit",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
-    "dev:desktop": "pnpm --filter desktop dev",
-    "dev:api": "pnpm --filter api dev",
-    "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "dev": "npm run build -w @orbit/shared && concurrently -k -n server,desktop \"npm run dev -w @orbit/server\" \"npm run dev -w @orbit/desktop\"",
+    "build": "npm run build -w @orbit/shared && npm run build -w @orbit/server && npm run build -w @orbit/desktop",
+    "typecheck": "npm run build -w @orbit/shared && npm run typecheck --workspaces --if-present && tsc -p tsconfig.tests.json",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "dist:mac": "npm run build && npm run dist:mac -w @orbit/desktop",
+    "dist:win": "npm run build && npm run dist:win -w @orbit/desktop",
+    "setup": "node scripts/setup.mjs",
+    "dev:db": "node scripts/dev-database.mjs",
+    "format": "prettier --write apps packages scripts docs README.md *.json *.ts *.js *.yml .github/workflows/*.yml",
+    "test:e2e": "playwright test",
+    "test:electron": "node scripts/electron-smoke.mjs"
   },
   "devDependencies": {
-    "typescript": "^5.5.4"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild"
-    ]
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.4.1",
+    "@types/supertest": "^7.2.1",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "mongodb-memory-server": "^11.2.0",
+    "supertest": "^7.2.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^5.0.0",
+    "prettier": "^3.9.6",
+    "@playwright/test": "^1.63.0"
   }
 }

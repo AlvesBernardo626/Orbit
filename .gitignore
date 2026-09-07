@@ -1,8 +1,14 @@
-node_modules/
+node_modules
 dist/
+dist-electron/
 build/
+release/
 .env
-.env.*.local
+.env.*
+!.env.example
 .DS_Store
 coverage/
 *.log
+
+test-results/
+playwright-report/

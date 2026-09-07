@@ -1,28 +1,13 @@
-# Architecture Overview
+# Arquitetura
 
-## Princípios
-- Desktop-first (Windows e macOS apenas, sem web pública).
-- Arquitetura Orientada ao Servidor (a API é a fonte da verdade).
-- Modular Monolith para o backend.
+Orbit é um monorepo npm com três pacotes: `apps/desktop`, `apps/server` e `packages/shared`.
 
-## Stack
-- **Desktop/UI**: Electron, React, TypeScript, Vite.
-- **Backend**: Node.js, TypeScript, Fastify.
-- **Database**: MongoDB, Mongoose/Zod.
-- **Realtime**: Socket.IO.
-- **Cache/Presença**: Redis.
-- **Mídia (Áudio/Vídeo/Tela)**: LiveKit.
-- **Storage**: S3-compatible (MinIO local).
+O desktop usa React para UI e Electron para integração com o SO. O renderer é sandboxed, sem Node, sem navegação externa e com CSP. O main process expõe apenas autenticação e seleção de fonte de captura. Refresh tokens são criptografados por safeStorage; o renderer mantém somente access token em memória. Não há localStorage de credenciais. O build recebe somente URLs públicas.
 
-## Estrutura do Monorepo
-- `apps/desktop/`: Aplicação Electron e interface React.
-- `apps/api/`: Backend Fastify.
-- `packages/ui/`: Design system e componentes React.
-- `packages/shared/`: Tipos, schemas de validação e utilitários.
-- `packages/realtime/`: Contratos de eventos Socket.IO.
-- `docs/`: Documentação do projeto.
+O servidor é um monólito modular Express com REST para operações persistentes e Socket.IO para presença, digitação, atualizações e signaling. Cada evento valida sessão, payload e participação. Eventos persistentes são enviados após confirmação no MongoDB; reconnect recarrega o estado pela API. MongoDB usa documentos de mensagem individuais e paginação por cursor `_id`, nunca arrays infinitos.
 
-## Ambientes
-1. **Development**: Localhost API, Docker (MongoDB, Redis, MinIO).
-2. **Test**: Infraestrutura de banco separada, mocks externos.
-3. **Production**: Render (API), MongoDB Atlas, Render KV/Redis, LiveKit Cloud, S3.
+Uma instância Render mantém presença e chamadas em memória. Reinício desconecta sockets; o cliente autentica novamente, recarrega o estado e reconstrói a chamada. Não configurar mais de uma réplica sem Redis/adapter, rate limiter distribuído e estado compartilhado de chamadas. Uma instância sempre ativa evita cold starts.
+
+A mídia inicial é uma malha WebRTC P2P limitada a 8 participantes. Captura, microfone e transporte são separados da UI. `MediaTransport` é a fronteira para substituir malha por LiveKit/mediasoup. A regra legada sugeria LiveKit, mas o pedido atual define signaling por Socket.IO e aceita P2P para grupos pequenos. Nenhum secret de TURN fica no build; o backend emite credenciais coturn temporárias.
+
+Somente Windows e macOS são alvos de distribuição. O navegador em modo desenvolvimento é útil para verificar UI e duas sessões, sem persistência de login.

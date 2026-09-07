@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "declaration": false,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "apps/server/src/tests/**/*.ts",
+    "apps/desktop/src/**/*.test.ts",
+    "tests/**/*.ts",
+    "playwright.config.ts",
+    "vitest.config.ts",
+    "apps/desktop/src/env.d.ts"
+  ]
+}

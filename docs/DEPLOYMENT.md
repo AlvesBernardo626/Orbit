@@ -33,7 +33,7 @@ git remote add origin https://github.com/SEU-USUARIO/SEU-REPOSITORIO.git
 git push -u origin main
 ```
 
-O Blueprint configura serviço Docker, instância paga, deploy automático desligado, health check `/health/ready` e até 30 segundos para encerramento gracioso. `/health/live` verifica o processo e informa o commit; readiness exige a conexão MongoDB. O deploy é acionado pelo CI somente depois dos testes e builds passarem, sempre com o SHA exato. Durante a implantação, o Render só troca o tráfego depois que a nova instância estiver pronta. Configure somente `MONGODB_URI` no painel; o Render gera `JWT_SECRET` automaticamente com alta entropia, e a aplicação recusa chaves de exemplo.
+O Blueprint configura serviço Docker no plano gratuito, deploy automático desligado, health check `/health/ready` e até 30 segundos para encerramento gracioso. `/health/live` verifica o processo e informa o commit; readiness exige a conexão MongoDB. O deploy é acionado pelo CI somente depois dos testes e builds passarem, sempre com o SHA exato. Configure somente `MONGODB_URI` no painel; o Render gera `JWT_SECRET` automaticamente com alta entropia, e a aplicação recusa chaves de exemplo. O plano gratuito pode suspender o serviço por inatividade e atrasar a primeira conexão seguinte; para disponibilidade contínua, altere `plan` para uma instância paga compatível.
 
 Use plano sempre ativo para evitar cold starts e interrupções de chamadas. A mídia P2P não passa pelo Render; a API hospeda apenas REST/Socket.IO. Não é necessário nem adequado tentar rodar coturn UDP dentro deste serviço web.
 

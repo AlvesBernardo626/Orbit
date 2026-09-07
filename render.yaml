@@ -3,7 +3,7 @@ services:
     name: orbit-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: 0.5c-512mb
+    plan: free
     region: virginia
     numInstances: 1
     autoDeployTrigger: off

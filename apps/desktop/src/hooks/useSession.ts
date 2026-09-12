@@ -5,7 +5,7 @@ export function useSession() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     void renew()
-      .catch(() => undefined)
+      .catch((e) => console.error('useSession: renew() falhou na inicialização:', e))
       .finally(() => setReady(true));
   }, []);
   return { session, ready };

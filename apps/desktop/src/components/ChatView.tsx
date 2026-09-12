@@ -1,6 +1,16 @@
 import { conversationName } from '../lib/conversations';
+import { emojiCategories } from '../lib/emoji';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Headphones, Send, MessageCircle, Settings, Pencil, Trash2, ArrowDown } from 'lucide-react';
+import {
+  Headphones,
+  Send,
+  MessageCircle,
+  Settings,
+  Pencil,
+  Trash2,
+  ArrowDown,
+  Smile,
+} from 'lucide-react';
 import type { Conversation, Message, User } from '@orbit/shared';
 import { messageSchema, canManage } from '@orbit/shared';
 import type { Socket } from 'socket.io-client';
@@ -31,13 +41,24 @@ export function ChatView({
   const [editing, setEditing] = useState<Message | null>(null);
   const [typing, setTyping] = useState<Record<string, number>>({});
   const [newBelow, setNewBelow] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const lastRead = useRef('');
   const lastTyping = useRef(0);
   const requestId = useRef(crypto.randomUUID());
+  const emojiRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [tick, setTick] = useState(0);
   const cid = conversation.id;
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const close = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) setEmojiOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [emojiOpen]);
   const scrollBottom = () => {
     const el = list.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -319,7 +340,44 @@ export function ChatView({
           </div>
         )}
         <form className="composer" onSubmit={send}>
+          <div className="emoji-trigger" ref={emojiRef}>
+            <button
+              type="button"
+              className="icon"
+              aria-label="Inserir emoji"
+              title="Emoji"
+              onClick={() => setEmojiOpen((o) => !o)}
+            >
+              <Smile size={19} />
+            </button>
+            {emojiOpen && (
+              <div className="emoji-popover" role="dialog" aria-label="Selecionar emoji">
+                {emojiCategories.map((cat) => (
+                  <div key={cat.label} className="emoji-category">
+                    <span className="emoji-category-label">{cat.label}</span>
+                    <div className="emoji-grid">
+                      {cat.emoji.map((e, i) => (
+                        <button
+                          type="button"
+                          key={cat.label + i}
+                          className="emoji-button"
+                          onClick={() => {
+                            setText((t) => t + e);
+                            setEmojiOpen(false);
+                            requestAnimationFrame(() => textareaRef.current?.focus());
+                          }}
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <textarea
+            ref={textareaRef}
             aria-label="Mensagem"
             value={text}
             maxLength={4000}

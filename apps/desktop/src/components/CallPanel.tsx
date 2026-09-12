@@ -1,6 +1,6 @@
 import { Media, Participant, Screen } from './CallMedia';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Mic, MicOff, Monitor, PhoneOff, Settings, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Minimize2, Monitor, PhoneOff, Settings, Volume2 } from 'lucide-react';
 import type { CallPeer, Conversation, User } from '@orbit/shared';
 import type { MediaTransport, RemoteMedia } from '../media/types';
 import { qualities } from '../media/types';
@@ -11,11 +11,13 @@ export function CallPanel({
   conversation,
   me,
   onError,
+  onMinimize,
 }: {
   transport: MediaTransport;
   conversation?: Conversation;
   me: User;
   onError: (s: string) => void;
+  onMinimize: () => void;
 }) {
   const state = useSyncExternalStore(transport.subscribe, transport.snapshot);
   const [settings, setSettings] = useState(false);
@@ -62,10 +64,7 @@ export function CallPanel({
       if (window.orbit) {
         const info = await window.orbit.capabilities();
         setRuntime(info);
-        if (
-          info.platform === 'darwin' &&
-          ['denied', 'restricted'].includes(info.permissions.screen)
-        ) {
+        if (['denied', 'restricted'].includes(info.permissions.screen)) {
           setScreenPermissionMissing(true);
           setSelecting(true);
           return;
@@ -75,8 +74,9 @@ export function CallPanel({
         setSelecting(true);
       } else setSelecting(true);
     } catch (e) {
+      console.error('picker() falhou:', e);
       const info = await window.orbit?.capabilities().catch(() => null);
-      if (info?.platform === 'darwin' && info.permissions.screen !== 'granted') {
+      if (info && info.permissions.screen !== 'granted' && info.permissions.screen !== 'unknown') {
         setRuntime(info);
         setScreenPermissionMissing(true);
         setSelecting(true);
@@ -92,6 +92,7 @@ export function CallPanel({
       await transport.share(stream, qualities[quality]!);
       setSelecting(false);
     } catch (e) {
+      console.error('share() falhou:', e);
       onError((e as Error).message);
     } finally {
       setBusy(false);
@@ -199,6 +200,9 @@ export function CallPanel({
         >
           <Settings size={18} />
         </button>
+        <button className="icon" aria-label="Minimizar chamada" title="Minimizar" onClick={onMinimize}>
+          <Minimize2 size={18} />
+        </button>
         <button className="danger" onClick={() => transport.leave()}>
           <PhoneOff size={18} />
           Sair
@@ -278,14 +282,15 @@ export function CallPanel({
             <div className="permission-help" role="alert">
               <strong>Permissão de gravação de tela necessária</strong>
               <p>
-                Abra Ajustes do Sistema &gt; Privacidade e Segurança &gt; Gravação de Tela, habilite
-                o Orbit e reinicie o aplicativo para a alteração entrar em vigor.
+                {runtime?.platform === 'win32'
+                  ? 'Abra Configurações > Privacidade e segurança > Captura de tela, permita o acesso para aplicativos da área de trabalho e tente novamente.'
+                  : 'Abra Ajustes do Sistema > Privacidade e Segurança > Gravação de Tela, habilite o Orbit e reinicie o aplicativo para a alteração entrar em vigor.'}
               </p>
               <button
                 className="primary"
                 onClick={() => void window.orbit?.openSystemSettings('screen').catch(onError)}
               >
-                Abrir Ajustes do Sistema
+                {runtime?.platform === 'win32' ? 'Abrir Configurações' : 'Abrir Ajustes do Sistema'}
               </button>
             </div>
           ) : window.orbit ? (

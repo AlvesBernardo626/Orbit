@@ -67,14 +67,31 @@ export async function login(input: unknown) {
   ensure(user && valid, 401, 'Usuário ou senha inválidos');
   return issue(user);
 }
+const REUSE_GRACE_MS = 15_000;
 export async function refresh(token: string) {
   const next = randomBytes(48).toString('base64url');
   const hash = digest(token);
-  const session = await SessionModel.findOneAndUpdate(
-    { tokenHash: hash, revokedAt: null, expiresAt: { $gt: new Date() } },
-    { $set: { tokenHash: digest(next), previousHash: hash } },
+  const now = new Date();
+  let session = await SessionModel.findOneAndUpdate(
+    { tokenHash: hash, revokedAt: null, expiresAt: { $gt: now } },
+    { $set: { tokenHash: digest(next), previousHash: hash, previousHashAt: now } },
     { returnDocument: 'after' },
   );
+  if (!session) {
+    // The client may have crashed after our previous rotation committed but before it
+    // persisted the new token to disk. Tolerate one retry with the just-rotated-from
+    // token within a short grace window instead of treating it as reuse.
+    session = await SessionModel.findOneAndUpdate(
+      {
+        previousHash: hash,
+        revokedAt: null,
+        expiresAt: { $gt: now },
+        previousHashAt: { $gt: new Date(now.getTime() - REUSE_GRACE_MS) },
+      },
+      { $set: { tokenHash: digest(next), previousHashAt: now } },
+      { returnDocument: 'after' },
+    );
+  }
   if (!session) {
     const revoked = await SessionModel.find({ previousHash: hash });
     await SessionModel.updateMany({ previousHash: hash }, { $set: { revokedAt: new Date() } });

@@ -22,6 +22,7 @@ const sessionSchema = new Schema(
     userId: ref,
     tokenHash: { type: String, required: true, unique: true },
     previousHash: { type: String, index: true },
+    previousHashAt: Date,
     expiresAt: { type: Date, required: true },
     revokedAt: Date,
   },

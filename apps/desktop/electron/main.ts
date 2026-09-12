@@ -55,6 +55,8 @@ const permissionMessage = (permission: MediaPermission) => {
   }
   if (permission === 'microphone' && process.platform === 'win32')
     return 'O Orbit não tem acesso ao microfone. Abra Configurações > Privacidade e segurança > Microfone e permita o acesso para aplicativos da área de trabalho.';
+  if (permission === 'screen' && process.platform === 'win32')
+    return 'O Orbit não tem acesso à captura de tela. Abra Configurações > Privacidade e segurança > Captura de tela, permita o acesso para aplicativos da área de trabalho e tente novamente.';
   return `Permissão de ${permission === 'microphone' ? 'microfone' : 'captura de tela'} indisponível.`;
 };
 const settingsUrls: Partial<Record<NodeJS.Platform, Record<SettingsPermission, string>>> = {
@@ -141,8 +143,10 @@ function configureAutoUpdates() {
   updateTimer.unref();
 }
 async function auth(action: string, data: unknown) {
-  if (action !== 'logout' && !safeStorage.isEncryptionAvailable())
+  if (action !== 'logout' && !safeStorage.isEncryptionAvailable()) {
+    console.error('auth: safeStorage.isEncryptionAvailable() = false — armazenamento seguro indisponível no SO');
     throw new Error('Armazenamento seguro indisponível');
+  }
   if (action === 'logout') {
     try {
       if (accessToken)
@@ -163,7 +167,8 @@ async function auth(action: string, data: unknown) {
   else if (action === 'refresh') {
     try {
       body = { refreshToken: safeStorage.decryptString(await readFile(tokenFile())) };
-    } catch {
+    } catch (error) {
+      console.error('auth(refresh): falha ao ler/decriptar session.enc:', error);
       return null;
     }
   } else throw new Error('Ação inválida');
@@ -176,10 +181,12 @@ async function auth(action: string, data: unknown) {
   const result = await readJsonResponse<AuthResult & { error?: string }>(response, api);
   if (!response.ok) {
     if (action === 'refresh' && response.status === 401) {
+      console.error('auth(refresh): servidor recusou o refresh token (401):', result.error);
       await unlink(tokenFile()).catch(() => undefined);
       accessToken = '';
       return null;
     }
+    console.error(`auth(${action}) falhou:`, response.status, result.error);
     throw new Error(result.error ?? 'Falha de autenticação');
   }
   await saveToken(result.refreshToken);
@@ -250,7 +257,8 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('capture:sources', async (event) => {
     check(event);
-    if (process.platform === 'darwin' && ['denied', 'restricted'].includes(mediaStatus('screen')))
+    const platformHasStatus = process.platform === 'darwin' || process.platform === 'win32';
+    if (platformHasStatus && ['denied', 'restricted'].includes(mediaStatus('screen')))
       throw new Error(permissionMessage('screen'));
     const sources = await desktopCapturer
       .getSources({
@@ -258,11 +266,12 @@ app.whenReady().then(async () => {
         thumbnailSize: { width: 320, height: 180 },
       })
       .catch((error: unknown) => {
-        if (process.platform === 'darwin' && mediaStatus('screen') !== 'granted')
+        console.error('capture:sources: desktopCapturer.getSources falhou:', error);
+        if (platformHasStatus && mediaStatus('screen') !== 'granted')
           throw new Error(permissionMessage('screen'));
-        throw error;
+        throw new Error(permissionMessage('screen'));
       });
-    if (process.platform === 'darwin' && mediaStatus('screen') !== 'granted')
+    if (platformHasStatus && mediaStatus('screen') !== 'granted')
       throw new Error(permissionMessage('screen'));
     return sources.map((s) => ({
       id: s.id,
@@ -303,6 +312,10 @@ app.whenReady().then(async () => {
       !selection ||
       selection.expires < Date.now()
     ) {
+      console.error('setDisplayMediaRequestHandler: seleção inválida ou expirada', {
+        hadSelection: Boolean(selection),
+        expired: selection ? selection.expires < Date.now() : undefined,
+      });
       callback({});
       return;
     }
@@ -313,6 +326,7 @@ app.whenReady().then(async () => {
       });
       const source = sources.find((s) => s.id === selection.id);
       if (!source) {
+        console.error('setDisplayMediaRequestHandler: fonte não encontrada', selection.id);
         callback({});
         return;
       }
@@ -320,7 +334,8 @@ app.whenReady().then(async () => {
         video: source,
         ...(selection.audio && systemAudio ? { audio: 'loopback' as const } : {}),
       });
-    } catch {
+    } catch (error) {
+      console.error('setDisplayMediaRequestHandler: getSources falhou', error);
       callback({});
     }
   });

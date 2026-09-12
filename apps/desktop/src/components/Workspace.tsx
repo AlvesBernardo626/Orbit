@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { Orbit, Hash, MessageCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Orbit, Hash, MessageCircle, PhoneOff } from 'lucide-react';
 import type { Conversation, IncomingCall, User } from '@orbit/shared';
 import { useSocket } from '../hooks/useSocket';
 import { useBootstrap } from '../hooks/useBootstrap';
@@ -23,6 +23,7 @@ export default function Workspace() {
   const [group, setGroup] = useState<Conversation | 'new' | null>(null);
   const [toast, setToast] = useState('');
   const [transport, setTransport] = useState<MeshTransport | null>(null);
+  const [callView, setCallView] = useState<'expanded' | 'minimized'>('expanded');
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const onError = useCallback((message: string) => setToast(message), []);
   useEffect(() => {
@@ -91,6 +92,8 @@ export default function Workspace() {
             conversations={data.conversations}
             me={data.me}
             onError={onError}
+            callView={callView}
+            setCallView={setCallView}
           />
         )}
         <div className="content-panel">
@@ -220,19 +223,46 @@ function ActiveCall({
   conversations,
   me,
   onError,
+  callView,
+  setCallView,
 }: {
   transport: MeshTransport;
   conversations: Conversation[];
   me: User;
   onError: (s: string) => void;
+  callView: 'expanded' | 'minimized';
+  setCallView: (view: 'expanded' | 'minimized') => void;
 }) {
   const state = useSyncExternalStore(transport.subscribe, transport.snapshot);
+  const previousPhase = useRef(state.phase);
+  useEffect(() => {
+    if ((previousPhase.current === 'idle' && state.phase !== 'idle') || state.error)
+      setCallView('expanded');
+    previousPhase.current = state.phase;
+  }, [state.phase, state.error, setCallView]);
+  const conversation = conversations.find((c) => c.id === state.conversationId);
+  if (callView === 'minimized' && (state.phase !== 'idle' || state.error))
+    return (
+      <div className="call-bar" role="status">
+        <i className="live-dot" />
+        <span>
+          {conversation?.name || 'Chamada de voz'} · {state.peers.length}/8
+        </span>
+        <button className="subtle" onClick={() => setCallView('expanded')}>
+          Voltar à chamada
+        </button>
+        <button className="danger icon" aria-label="Sair da chamada" onClick={() => transport.leave()}>
+          <PhoneOff size={15} />
+        </button>
+      </div>
+    );
   return (
     <CallPanel
       transport={transport}
-      conversation={conversations.find((c) => c.id === state.conversationId)}
+      conversation={conversation}
       me={me}
       onError={onError}
+      onMinimize={() => setCallView('minimized')}
     />
   );
 }
